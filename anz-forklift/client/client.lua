@@ -57,7 +57,7 @@ AddEventHandler('anzdelivery:GetDelivery',function()
         while not HasModelLoaded(GetHashKey('benson'))do
             Citizen.Wait(0)end
         ClearAreaOfVehicles(DeliveryCarSpawn.x,DeliveryCarSpawn.y,DeliveryCarSpawn.z,15.0,false,false,false,false,false)
-        QBCore.Functions.SpawnVehicle(Config.Courier['PickUpCar'].Model, function(transport)
+        QBCore.Functions.SpawnVehicle(Config.Forklift['PickUpCar'].Model, function(transport)
         SetEntityAsMissionEntity(transport)
         SetEntityHeading(transport,266.6)
         SetVehicleDoorsLocked(transport,2)
@@ -71,7 +71,8 @@ AddEventHandler('anzdelivery:GetDelivery',function()
         SetVehicleExtra(transport,7,true)
         RequestModel("s_m_m_security_01")
         while not HasModelLoaded("s_m_m_security_01")do
-            Wait(10)end
+            Wait(10)
+        end, Config.Forklift['PickUpCar'].Pos, true)
         pilot = CreatePedInsideVehicle(transport,1,"s_m_m_security_01",-1,true,true)
         SetBlockingOfNonTemporaryEvents(pilot,true)
         SetEntityInvincible(pilot,true)
