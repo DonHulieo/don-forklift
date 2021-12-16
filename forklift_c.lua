@@ -266,7 +266,7 @@ local Keys = {
       while true do
           Citizen.Wait(3)
           
-              local plyCoords = GetEntityCoords(GetPlayerPed(-1), false)
+              local plyCoords = GetEntityCoords(PlayerPedId(), false)
               local distCar = Vdist(plyCoords.x, plyCoords.y, plyCoords.z, ForkliftSpawn.x, ForkliftSpawn.y, ForkliftSpawn.z)
               local zlecDist = Vdist(plyCoords.x, plyCoords.y, plyCoords.z, EmploymentCircle.x, EmploymentCircle.y, EmploymentCircle.z)
               
@@ -305,9 +305,9 @@ local Keys = {
                             end 
                         elseif IsControlJustPressed(0, Keys['E']) then 
                             TriggerEvent('anzdelivery:deliverypickup','1')
-                            TaskStartScenarioInPlace(GetPlayerPed(-1), "WORLD_HUMAN_CLIPBOARD", 0, false)
+                            TaskStartScenarioInPlace(PlayerPedId(), "WORLD_HUMAN_CLIPBOARD", 0, false)
                             Citizen.Wait(2000)
-                            ClearPedTasks(GetPlayerPed(-1))
+                            ClearPedTasks(PlayerPedId())
                             QBCore.Functions.Notify('Delivery is marked...')
                         end
                     end
@@ -338,7 +338,7 @@ local Keys = {
               SetVehicleNumberPlateText(forklift, "ECLW"..tostring(math.random(1000, 9999)))
               SetEntityHeading(forklift,90.00)
               exports['LegacyFuel']:SetFuel(forklift, 100.0)
-              TaskWarpPedIntoVehicle(GetPlayerPed(-1),forklift,-1)
+              TaskWarpPedIntoVehicle(PlayerPedId(),forklift,-1)
               SetEntityAsMissionEntity(forklift, true, true)
               SetVehicleColours(forklift,111,111)VehicleTaken=1
               TriggerEvent("vehiclekeys:client:SetOwner", GetVehicleNumberPlateText(forklift))
