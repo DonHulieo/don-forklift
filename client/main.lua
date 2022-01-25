@@ -308,6 +308,7 @@ Citizen.CreateThread(function()
                 DeleteEntity(pilot)
                 DeleteEntity(package)
                 DeleteEntity(vehicle)
+		RemoveBlip(PalletBlip)
                 QBCore.Functions.Notify('The order was cancelled...', 'error')
             end
         else
