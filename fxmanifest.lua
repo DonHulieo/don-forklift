@@ -1,12 +1,13 @@
-fx_version 'adamant'
+fx_version 'cerulean'
+
 games { 'gta5' }
 
-client_scripts {
-    "config.lua",
-    "forklift_c.lua"
+server_scripts {
+	'config.lua',
+	'server/main.lua'
 }
 
-server_scripts {
-    "config.lua",
-    "forklift_sv.lua"
+client_scripts {
+	'config.lua',
+	'client/main.lua'
 }
