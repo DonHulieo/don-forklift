@@ -2,6 +2,7 @@ local QBCore = exports['qb-core']:GetCoreObject()
 local PlayerData = {}
 local Cancelled, response, EngineOn, deliveryTimer = false, false, false, false
 local VehicleTaken, CarLivery, DeliveryTime, OwnsHangar = 0, 0, 0, 0
+local PalletBlip
 local bonus1 = 12
 local bonus2 = 10
 local bonus3 = 8
@@ -20,9 +21,6 @@ end)
   
 RegisterNetEvent('don-forklift:deliverypickup')
 AddEventHandler('don-forklift:deliverypickup',function(a)
-    local DeliveryCarSpawn = {x = 1113.12, y = -3334.41, z = 5.92} 
-    local DeliveryCoords = {x = 1229.2, y = -3222.6, z = 5.8} 
-
     Cancelled = false
 
     if a == '1'then
@@ -116,7 +114,8 @@ AddEventHandler('don-forklift:deliverypickup',function(a)
             if Cancelled == true then
                 return
             end
-
+            
+        RemoveBlip(PalletBlip)
         QBCore.Functions.Notify('Package loaded...', 'success')
         Citizen.Wait(2500)
         QBCore.Functions.Notify('Package loaded in '..DeliveryTime..' seconds.')
@@ -160,22 +159,21 @@ end)
 
 -------------------- FUNCTIONS --------------------
 
-local function DrawText3D(x, y, z, text)
-    local onScreen, _x, _y = World3dToScreen2d(x, y, z)
-    local px, py, pz = table.unpack(GetGameplayCamCoords())
-
-    SetTextScale(0.37, 0.37)
+local function DrawText3Ds(x, y, z, text, shadow)
+	SetTextScale(0.35, 0.35)
     SetTextFont(4)
     SetTextProportional(1)
     SetTextColour(255, 255, 255, 215)
     SetTextEntry("STRING")
-    SetTextCentre(1)
+    SetTextCentre(true)
     AddTextComponentString(text)
-    DrawText(_x, _y)
-
-    local factor = (string.len(text)) / 370
-
-    DrawRect(_x, _y + 0.0125, 0.015 + factor, 0.03, 33, 33, 33, 133)
+    SetDrawOrigin(x,y,z, 0)
+    DrawText(0.0, 0.0)
+    local factor = shadow / 370
+	if shadow ~= 0 then		
+   		DrawRect(0.0, 0.0+0.0125, 0.017+ factor, 0.03, 0, 0, 0, 75)
+	end
+    ClearDrawOrigin()
 end
 
 function SelectPallet(a)
@@ -186,26 +184,81 @@ function SelectPallet(a)
         SetEntityAsMissionEntity(package)
         SetEntityDynamic(package, true)
         FreezeEntityPosition(package, false)
+        PalletBlip = AddBlipForCoord(Config.Pallet['1'].Pos.x, Config.Pallet['1'].Pos.y, Config.Pallet['1'].Pos.z)
+  
+        SetBlipSprite (PalletBlip, 478)
+        SetBlipDisplay(PalletBlip, 4)
+        SetBlipScale  (PalletBlip, 0.8)
+        SetBlipColour (PalletBlip, 0)
+        SetBlipAsShortRange(PalletBlip, true)
+    
+        BeginTextCommandSetBlipName("STRING")
+        AddTextComponentString('Pallet')
+        EndTextCommandSetBlipName(PalletBlip)
     elseif a == '2nd'then 
         package = CreateObject(GetHashKey('prop_boxpile_06a'), Config.Pallet['2'].Pos.x, Config.Pallet['2'].Pos.y, Config.Pallet['2'].Pos.z-0.95, true, true, true)
         SetEntityAsMissionEntity(package)
         SetEntityDynamic(package, true)
         FreezeEntityPosition(package, false)
+        PalletBlip = AddBlipForCoord(Config.Pallet['2'].Pos.x, Config.Pallet['2'].Pos.y, Config.Pallet['2'].Pos.z)
+  
+        SetBlipSprite (PalletBlip, 478)
+        SetBlipDisplay(PalletBlip, 4)
+        SetBlipScale  (PalletBlip, 0.8)
+        SetBlipColour (PalletBlip, 0)
+        SetBlipAsShortRange(PalletBlip, true)
+    
+        BeginTextCommandSetBlipName("STRING")
+        AddTextComponentString('Pallet')
+        EndTextCommandSetBlipName(PalletBlip)
     elseif a == '3rd'then 
         package = CreateObject(GetHashKey('prop_boxpile_06a'), Config.Pallet['3'].Pos.x, Config.Pallet['3'].Pos.y, Config.Pallet['3'].Pos.z-0.95, true, true, true)
         SetEntityAsMissionEntity(package)
         SetEntityDynamic(package, true)
         FreezeEntityPosition(package, false)
+        PalletBlip = AddBlipForCoord(Config.Pallet['3'].Pos.x, Config.Pallet['3'].Pos.y, Config.Pallet['3'].Pos.z)
+  
+        SetBlipSprite (PalletBlip, 478)
+        SetBlipDisplay(PalletBlip, 4)
+        SetBlipScale  (PalletBlip, 0.8)
+        SetBlipColour (PalletBlip, 0)
+        SetBlipAsShortRange(PalletBlip, true)
+    
+        BeginTextCommandSetBlipName("STRING")
+        AddTextComponentString('Pallet')
+        EndTextCommandSetBlipName(PalletBlip)
     elseif a == '4th'then 
         package = CreateObject(GetHashKey('prop_boxpile_06a'), Config.Pallet['4'].Pos.x, Config.Pallet['4'].Pos.y, Config.Pallet['4'].Pos.z-0.95, true, true, true)
         SetEntityAsMissionEntity(package)
         SetEntityDynamic(package, true)
         FreezeEntityPosition(package, false)
+        PalletBlip = AddBlipForCoord(Config.Pallet['4'].Pos.x, Config.Pallet['4'].Pos.y, Config.Pallet['4'].Pos.z)
+  
+        SetBlipSprite (PalletBlip, 478)
+        SetBlipDisplay(PalletBlip, 4)
+        SetBlipScale  (PalletBlip, 0.8)
+        SetBlipColour (PalletBlip, 0)
+        SetBlipAsShortRange(PalletBlip, true)
+    
+        BeginTextCommandSetBlipName("STRING")
+        AddTextComponentString('Pallet')
+        EndTextCommandSetBlipName(PalletBlip)
     elseif a == '5th'then 
         package = CreateObject(GetHashKey('prop_boxpile_06a'), Config.Pallet['5'].Pos.x, Config.Pallet['5'].Pos.y, Config.Pallet['5'].Pos.z-0.95, true, true, true)
         SetEntityAsMissionEntity(package)
         SetEntityDynamic(package, true)
         FreezeEntityPosition(package, false)
+        PalletBlip = AddBlipForCoord(Config.Pallet['5'].Pos.x, Config.Pallet['5'].Pos.y, Config.Pallet['5'].Pos.z)
+  
+        SetBlipSprite (PalletBlip, 478)
+        SetBlipDisplay(PalletBlip, 4)
+        SetBlipScale  (PalletBlip, 0.8)
+        SetBlipColour (PalletBlip, 0)
+        SetBlipAsShortRange(PalletBlip, true)
+    
+        BeginTextCommandSetBlipName("STRING")
+        AddTextComponentString('Pallet')
+        EndTextCommandSetBlipName(PalletBlip)
     end 
 end
 
@@ -262,19 +315,6 @@ Citizen.CreateThread(function()
         end
     end
 end)	
-          
-Citizen.CreateThread(function()
-    while true do
-        Citizen.Wait(4)
-        
-        if DoesEntityExist(package) then
-            local packCoord = GetEntityCoords(package)
-            DrawMarker(0, packCoord.x, packCoord.y, packCoord.z+2.1, 0, 0, 0, 0, 0, 0, 1.0, 1.0, 1.0, 135, 31, 35, 150, 1, 0, 0, 0)
-        else
-            Citizen.Wait(2500)
-        end
-    end
-end)  
   
 Citizen.CreateThread(function()
     while true do
@@ -292,7 +332,7 @@ Citizen.CreateThread(function()
             end
             
             if #(pos - vector3(Config.Forklift['Forklift'].Pos.x, Config.Forklift['Forklift'].Pos.y, Config.Forklift['Forklift'].Pos.z)) <= 1.0 then
-                DrawText3D(Config.Forklift['Forklift'].Pos.x, Config.Forklift['Forklift'].Pos.y, Config.Forklift['Forklift'].Pos.z, "[E] Forklift")
+                DrawText3Ds(Config.Forklift['Forklift'].Pos.x, Config.Forklift['Forklift'].Pos.y, Config.Forklift['Forklift'].Pos.z, "[~g~E~w~] Forklift", 35)
                 if IsControlJustPressed(0, Keys['E']) then 
                     LendVehicle('1')
                     Citizen.Wait(500)
@@ -300,8 +340,8 @@ Citizen.CreateThread(function()
             end
 
             if #(pos - vector3(Config.Forklift['Jobstart'].Pos.x, Config.Forklift['Jobstart'].Pos.y, Config.Forklift['Jobstart'].Pos.z)) <= 1.0 and OwnsHangar == 1 then
-                DrawText3D(Config.Forklift['Jobstart'].Pos.x, Config.Forklift['Jobstart'].Pos.y, Config.Forklift['Jobstart'].Pos.z, "[E] Take order")
-                DrawText3D(Config.Forklift['Jobstart'].Pos.x, Config.Forklift['Jobstart'].Pos.y, Config.Forklift['Jobstart'].Pos.z-0.13, "[G] Go off Duty")
+                DrawText3Ds(Config.Forklift['Jobstart'].Pos.x, Config.Forklift['Jobstart'].Pos.y, Config.Forklift['Jobstart'].Pos.z, "[~g~E~w~] Take order" ,35)
+                DrawText3Ds(Config.Forklift['Jobstart'].Pos.x, Config.Forklift['Jobstart'].Pos.y, Config.Forklift['Jobstart'].Pos.z-0.13, "[~g~G~w~] Go off Duty", 35)
                 if IsControlJustPressed(0, Keys['G']) then
                     TriggerServerEvent("don-forklift:leaveHangar", '1')
                     TriggerServerEvent("QBCore:ToggleDuty")
@@ -314,6 +354,7 @@ Citizen.CreateThread(function()
                         deliveryTimer = false
                         backOpened = false
                         EngineOn = false
+                        RemoveBlip(PalletBlip)
                         DeleteEntity(transport)
                         DeleteEntity(pilot)
                         DeleteEntity(package)
@@ -328,7 +369,7 @@ Citizen.CreateThread(function()
             end
 
             if #(pos - vector3(Config.Forklift['Jobstart'].Pos.x, Config.Forklift['Jobstart'].Pos.y, Config.Forklift['Jobstart'].Pos.z)) <= 1.0 and OwnsHangar == 0 then
-                DrawText3D(Config.Forklift['Jobstart'].Pos.x, Config.Forklift['Jobstart'].Pos.y, Config.Forklift['Jobstart'].Pos.z, "[G] Go on Duty")
+                DrawText3Ds(Config.Forklift['Jobstart'].Pos.x, Config.Forklift['Jobstart'].Pos.y, Config.Forklift['Jobstart'].Pos.z, "[~g~G~w~] Go on Duty", 35)
                 if IsControlJustPressed(0, Keys['G']) then 
                     TriggerServerEvent("don-forklift:takeoverHangar", '1')
                     TriggerServerEvent("QBCore:ToggleDuty")
@@ -351,6 +392,10 @@ Citizen.CreateThread(function()
                 TriggerServerEvent("don-forklift:toofar")
                 TriggerServerEvent("QBCore:ToggleDuty")
                 OwnsHangar = 0
+                RemoveBlip(PalletBlip)
+                DeleteEntity(transport)
+                DeleteEntity(pilot)
+                DeleteEntity(package)
                 Citizen.Wait(1500)
             else 
                 Citizen.Wait(3500)
