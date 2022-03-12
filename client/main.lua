@@ -1,8 +1,8 @@
 local QBCore = exports['qb-core']:GetCoreObject()
 local PlayerData = {}
 local Cancelled, response, EngineOn, deliveryTimer = false, false, false, false
-local VehicleTaken, CarLivery, DeliveryTime, OwnsHangar = 0, 0, 0, 0
-local PalletBlip
+local VehicleTaken, DeliveryTime, OwnsHangar = 0, 0, 0
+local PalletBlip, Pallet
 local bonus1 = 12
 local bonus2 = 10
 local bonus3 = 8
@@ -29,24 +29,22 @@ AddEventHandler('don-forklift:deliverypickup',function(a)
             return
         end
 
-        local b = math.random(1, 5)
+        Pallets = math.random(1, #Config.Pallet)
+        
+        Pallet = CreateObject(GetHashKey('prop_boxpile_06a'), Config.Pallet[Pallets].Pos.x, Config.Pallet[Pallets].Pos.y, Config.Pallet[Pallets].Pos.z-0.95, true, true, true)
+            SetEntityAsMissionEntity(Pallet)
+            SetEntityDynamic(Pallet, true)
+            FreezeEntityPosition(Pallet, false)
 
-            if b == 1 then
-                CarLivery = 3
-                SelectPallet('1st')
-            elseif b == 2 then
-                CarLivery = 4
-                SelectPallet('2nd')
-            elseif b == 3 then
-                CarLivery = 6
-                SelectPallet('3rd')
-            elseif b == 4 then
-                CarLivery = 2
-                SelectPallet('4th')
-            elseif b == 5 then
-                CarLivery = 1
-                SelectPallet('5th')
-            end
+        PalletBlip = AddBlipForCoord(Config.Pallet[Pallets].Pos.x, Config.Pallet[Pallets].Pos.y, Config.Pallet[Pallets].Pos.z)
+            SetBlipSprite (PalletBlip, 478)
+            SetBlipDisplay(PalletBlip, 4)
+            SetBlipScale  (PalletBlip, 0.8)
+            SetBlipColour (PalletBlip, 0)
+            SetBlipAsShortRange(PalletBlip, true)
+            BeginTextCommandSetBlipName("STRING")
+            AddTextComponentString('Pallet')
+            EndTextCommandSetBlipName(PalletBlip)
             
         RequestModel(GetHashKey('benson'))
             while not HasModelLoaded(GetHashKey('benson'))do
@@ -66,7 +64,7 @@ AddEventHandler('don-forklift:deliverypickup',function(a)
             SetVehicleExtra(transport, 5, true)
             SetVehicleExtra(transport, 6, true)
             SetVehicleExtra(transport, 7, true)
-            SetVehicleExtra(transport, CarLivery, false)
+            SetVehicleExtra(transport, 2, false)
 
         RequestModel("s_m_m_security_01")
             while not HasModelLoaded("s_m_m_security_01")do
@@ -102,11 +100,11 @@ AddEventHandler('don-forklift:deliverypickup',function(a)
             while backOpened do
                 Citizen.Wait(2)
                 DrawMarker(1, d, e, f, 0, 0, 0, 0, 0, 0, 1.7, 1.7, 1.7, 135, 31, 35, 150, 1, 0, 0, 0)
-                local g = GetEntityCoords(package)
+                local g = GetEntityCoords(Pallet)
                 local h = Vdist(d, e, f, g.x, g.y, g.z)
                 if h <= 2.0 then
                     SetVehicleDoorShut(transport, 5, false)
-                    DeleteEntity(package)
+                    DeleteEntity(Pallet)
                     backOpened = false
                 end
             end
@@ -176,110 +174,25 @@ local function DrawText3Ds(x, y, z, text, shadow)
     ClearDrawOrigin()
 end
 
-function SelectPallet(a)
-    DeliveryTime = 0
-    deliveryTimer = true
-    if a == '1st'then 
-        package = CreateObject(GetHashKey('prop_boxpile_06a'), Config.Pallet['1'].Pos.x, Config.Pallet['1'].Pos.y, Config.Pallet['1'].Pos.z-0.95, true, true, true)
-        SetEntityAsMissionEntity(package)
-        SetEntityDynamic(package, true)
-        FreezeEntityPosition(package, false)
-        PalletBlip = AddBlipForCoord(Config.Pallet['1'].Pos.x, Config.Pallet['1'].Pos.y, Config.Pallet['1'].Pos.z)
-  
-        SetBlipSprite (PalletBlip, 478)
-        SetBlipDisplay(PalletBlip, 4)
-        SetBlipScale  (PalletBlip, 0.8)
-        SetBlipColour (PalletBlip, 0)
-        SetBlipAsShortRange(PalletBlip, true)
-    
-        BeginTextCommandSetBlipName("STRING")
-        AddTextComponentString('Pallet')
-        EndTextCommandSetBlipName(PalletBlip)
-    elseif a == '2nd'then 
-        package = CreateObject(GetHashKey('prop_boxpile_06a'), Config.Pallet['2'].Pos.x, Config.Pallet['2'].Pos.y, Config.Pallet['2'].Pos.z-0.95, true, true, true)
-        SetEntityAsMissionEntity(package)
-        SetEntityDynamic(package, true)
-        FreezeEntityPosition(package, false)
-        PalletBlip = AddBlipForCoord(Config.Pallet['2'].Pos.x, Config.Pallet['2'].Pos.y, Config.Pallet['2'].Pos.z)
-  
-        SetBlipSprite (PalletBlip, 478)
-        SetBlipDisplay(PalletBlip, 4)
-        SetBlipScale  (PalletBlip, 0.8)
-        SetBlipColour (PalletBlip, 0)
-        SetBlipAsShortRange(PalletBlip, true)
-    
-        BeginTextCommandSetBlipName("STRING")
-        AddTextComponentString('Pallet')
-        EndTextCommandSetBlipName(PalletBlip)
-    elseif a == '3rd'then 
-        package = CreateObject(GetHashKey('prop_boxpile_06a'), Config.Pallet['3'].Pos.x, Config.Pallet['3'].Pos.y, Config.Pallet['3'].Pos.z-0.95, true, true, true)
-        SetEntityAsMissionEntity(package)
-        SetEntityDynamic(package, true)
-        FreezeEntityPosition(package, false)
-        PalletBlip = AddBlipForCoord(Config.Pallet['3'].Pos.x, Config.Pallet['3'].Pos.y, Config.Pallet['3'].Pos.z)
-  
-        SetBlipSprite (PalletBlip, 478)
-        SetBlipDisplay(PalletBlip, 4)
-        SetBlipScale  (PalletBlip, 0.8)
-        SetBlipColour (PalletBlip, 0)
-        SetBlipAsShortRange(PalletBlip, true)
-    
-        BeginTextCommandSetBlipName("STRING")
-        AddTextComponentString('Pallet')
-        EndTextCommandSetBlipName(PalletBlip)
-    elseif a == '4th'then 
-        package = CreateObject(GetHashKey('prop_boxpile_06a'), Config.Pallet['4'].Pos.x, Config.Pallet['4'].Pos.y, Config.Pallet['4'].Pos.z-0.95, true, true, true)
-        SetEntityAsMissionEntity(package)
-        SetEntityDynamic(package, true)
-        FreezeEntityPosition(package, false)
-        PalletBlip = AddBlipForCoord(Config.Pallet['4'].Pos.x, Config.Pallet['4'].Pos.y, Config.Pallet['4'].Pos.z)
-  
-        SetBlipSprite (PalletBlip, 478)
-        SetBlipDisplay(PalletBlip, 4)
-        SetBlipScale  (PalletBlip, 0.8)
-        SetBlipColour (PalletBlip, 0)
-        SetBlipAsShortRange(PalletBlip, true)
-    
-        BeginTextCommandSetBlipName("STRING")
-        AddTextComponentString('Pallet')
-        EndTextCommandSetBlipName(PalletBlip)
-    elseif a == '5th'then 
-        package = CreateObject(GetHashKey('prop_boxpile_06a'), Config.Pallet['5'].Pos.x, Config.Pallet['5'].Pos.y, Config.Pallet['5'].Pos.z-0.95, true, true, true)
-        SetEntityAsMissionEntity(package)
-        SetEntityDynamic(package, true)
-        FreezeEntityPosition(package, false)
-        PalletBlip = AddBlipForCoord(Config.Pallet['5'].Pos.x, Config.Pallet['5'].Pos.y, Config.Pallet['5'].Pos.z)
-  
-        SetBlipSprite (PalletBlip, 478)
-        SetBlipDisplay(PalletBlip, 4)
-        SetBlipScale  (PalletBlip, 0.8)
-        SetBlipColour (PalletBlip, 0)
-        SetBlipAsShortRange(PalletBlip, true)
-    
-        BeginTextCommandSetBlipName("STRING")
-        AddTextComponentString('Pallet')
-        EndTextCommandSetBlipName(PalletBlip)
-    end 
-end
-
 function LendVehicle(a)
     if OwnsHangar == 1 then
         if VehicleTaken == 0 then
             QBCore.Functions.SpawnVehicle(Config.Forklift['Forklift'].Model, function(vehicle)
                 SetVehicleNumberPlateText(vehicle, "ECLW"..tostring(math.random(1000, 9999)))
                 SetEntityHeading(vehicle, 90.0)
-                exports['LegacyFuel']:SetFuel(vehicle, 100.0)
+                exports['lj-fuel']:SetFuel(vehicle, 100.0)
                 TaskWarpPedIntoVehicle(PlayerPedId(), vehicle, -1)
                 SetEntityAsMissionEntity(vehicle, true, true)
                 TriggerEvent("vehiclekeys:client:SetOwner", GetVehicleNumberPlateText(vehicle))
                 SetVehicleEngineOn(vehicle, true, true)
                 VehicleTaken = 1
-                QBCore.Functions.Notify("Your vehicle has arrived", "success")
+                QBCore.Functions.Notify("Forklift retrieved from garage...", "success")
             end, Config.Forklift['Forklift'].Pos, true)
         elseif IsPedInAnyVehicle(PlayerPedId(), false) then
             if GetPedInVehicleSeat(GetVehiclePedIsIn(PlayerPedId()), -1) == PlayerPedId() then
                 DeleteVehicle(GetVehiclePedIsIn(PlayerPedId()))
                 QBCore.Functions.Notify('Forklift returned to the garage...', 'success')
+                VehicleTaken = 0
                 Citizen.Wait(500)
             else
                 QBCore.Functions.Notify('You must be the driver to do this...', 'error')
@@ -306,9 +219,9 @@ Citizen.CreateThread(function()
                 EngineOn = false
                 DeleteEntity(transport)
                 DeleteEntity(pilot)
-                DeleteEntity(package)
+                DeleteEntity(Pallet)
                 DeleteEntity(vehicle)
-		RemoveBlip(PalletBlip)
+		        RemoveBlip(PalletBlip)
                 QBCore.Functions.Notify('The order was cancelled...', 'error')
             end
         else
@@ -333,16 +246,24 @@ Citizen.CreateThread(function()
             end
             
             if #(pos - vector3(Config.Forklift['Forklift'].Pos.x, Config.Forklift['Forklift'].Pos.y, Config.Forklift['Forklift'].Pos.z)) <= 1.0 then
-                DrawText3Ds(Config.Forklift['Forklift'].Pos.x, Config.Forklift['Forklift'].Pos.y, Config.Forklift['Forklift'].Pos.z, "[~g~E~w~] Forklift", 35)
-                if IsControlJustPressed(0, Keys['E']) then 
-                    LendVehicle('1')
-                    Citizen.Wait(500)
-                end                  
+                if IsPedInAnyVehicle(PlayerPedId(), false) then
+                    DrawText3Ds(Config.Forklift['Forklift'].Pos.x, Config.Forklift['Forklift'].Pos.y, Config.Forklift['Forklift'].Pos.z, "[~r~E~w~] Store Forklift", 35)
+                    if IsControlJustPressed(0, Keys['E']) then 
+                        LendVehicle('1')
+                        Citizen.Wait(500)
+                    end  
+                else
+                    DrawText3Ds(Config.Forklift['Forklift'].Pos.x, Config.Forklift['Forklift'].Pos.y, Config.Forklift['Forklift'].Pos.z, "[~g~E~w~] Forklift", 35)
+                    if IsControlJustPressed(0, Keys['E']) then 
+                        LendVehicle('1')
+                        Citizen.Wait(500)
+                    end  
+                end                
             end
 
             if #(pos - vector3(Config.Forklift['Jobstart'].Pos.x, Config.Forklift['Jobstart'].Pos.y, Config.Forklift['Jobstart'].Pos.z)) <= 1.0 and OwnsHangar == 1 then
                 DrawText3Ds(Config.Forklift['Jobstart'].Pos.x, Config.Forklift['Jobstart'].Pos.y, Config.Forklift['Jobstart'].Pos.z, "[~g~E~w~] Take order" ,35)
-                DrawText3Ds(Config.Forklift['Jobstart'].Pos.x, Config.Forklift['Jobstart'].Pos.y, Config.Forklift['Jobstart'].Pos.z-0.13, "[~g~G~w~] Go off Duty", 35)
+                DrawText3Ds(Config.Forklift['Jobstart'].Pos.x, Config.Forklift['Jobstart'].Pos.y, Config.Forklift['Jobstart'].Pos.z-0.13, "[~r~G~w~] Go off Duty", 35)
                 if IsControlJustPressed(0, Keys['G']) then
                     TriggerServerEvent("don-forklift:leaveHangar", '1')
                     TriggerServerEvent("QBCore:ToggleDuty")
@@ -358,7 +279,7 @@ Citizen.CreateThread(function()
                         RemoveBlip(PalletBlip)
                         DeleteEntity(transport)
                         DeleteEntity(pilot)
-                        DeleteEntity(package)
+                        DeleteEntity(Pallet)
                     end 
                 elseif IsControlJustPressed(0, Keys['E']) then 
                     TriggerEvent('don-forklift:deliverypickup','1')
@@ -396,7 +317,7 @@ Citizen.CreateThread(function()
                 RemoveBlip(PalletBlip)
                 DeleteEntity(transport)
                 DeleteEntity(pilot)
-                DeleteEntity(package)
+                DeleteEntity(Pallet)
                 Citizen.Wait(1500)
             else 
                 Citizen.Wait(3500)
