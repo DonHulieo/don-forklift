@@ -12,9 +12,14 @@ Warehousing script for QBCore
 
 ## Dependencies
 - [qb-core](https://github.com/qbcore-framework/qb-core)
+- [lj-fuel](https://github.com/loljoshie/lj-fuel)
+
+## Features
+- Easily configurable locations and highly optimised
+- Locked to a job and has automatic duty cycles
+- A percantage of money earned through deliveries is sent to the business society
 
 ## Job (qb-core/shared/jobs.lua)
-
 - Make sure to add below, or a similar version of, in your shared otherwise the job will not work.
 
 ```
