@@ -39,10 +39,12 @@ AddEventHandler('don-forklift:executionmission', function(bonus)
 	local src = source
 	local PayRate = math.random(Config.MinPayout, Config.MaxPayout)
 	local Player = QBCore.Functions.GetPlayer(src)
+	local societypay = math.ceil(PayRate * 4)
 
 	if bonus == 'bonus' then
 		Player.Functions.AddMoney("cash", PayRate)
 		TriggerClientEvent('QBCore:Notify', src, 'You get $'..PayRate..' for delivery', 'success')
+		TriggerEvent('qb-bossmenu:server:addAccountMoney', Player.PlayerData.job.name, societypay)
 		Wait(2500)
 	else
 		Player.Functions.AddMoney("cash", bonus)
