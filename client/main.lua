@@ -2,7 +2,7 @@ local QBCore = exports['qb-core']:GetCoreObject()
 local PlayerData = {}
 local Cancelled, response, EngineOn, deliveryTimer = false, false, false, false
 local VehicleTaken, DeliveryTime, OwnsHangar = 0, 0, 0
-local PalletBlip, Pallet
+local PalletBlip, JobBlip, ForkliftGarageBlip, Pallet
 local bonus1 = 12
 local bonus2 = 10
 local bonus3 = 8
@@ -12,11 +12,38 @@ local bonus3 = 8
 RegisterNetEvent('QBCore:Client:OnPlayerLoaded')
 AddEventHandler('QBCore:Client:OnPlayerLoaded', function()
     PlayerData.job = QBCore.Functions.GetPlayerData().job
+    if not DoesBlipExist(JobBlip) then
+        JobBlip = AddBlipForCoord(Config.Forklift['Jobstart'].Pos.x, Config.Forklift['Jobstart'].Pos.y, Config.Forklift['Jobstart'].Pos.z)
+        SetBlipSprite (JobBlip, 525)
+        SetBlipDisplay(JobBlip, 4)
+        SetBlipScale  (JobBlip, 0.6)
+        SetBlipColour (JobBlip, 28)
+        SetBlipAsShortRange(JobBlip, true)
+        BeginTextCommandSetBlipName("STRING")
+        AddTextComponentString('Warehouse Logistics')
+        EndTextCommandSetBlipName(JobBlip)
+    end
 end)
 
 RegisterNetEvent('QBCore:Client:OnJobUpdate')
 AddEventHandler('QBCore:Client:OnJobUpdate', function()
     PlayerData.job = QBCore.Functions.GetPlayerData().job
+    if not DoesBlipExist(JobBlip) then 
+        JobBlip = AddBlipForCoord(Config.Forklift['Jobstart'].Pos.x, Config.Forklift['Jobstart'].Pos.y, Config.Forklift['Jobstart'].Pos.z)
+        SetBlipSprite (JobBlip, 525)
+        SetBlipDisplay(JobBlip, 4)
+        SetBlipScale  (JobBlip, 0.6)
+        SetBlipColour (JobBlip, 28)
+        SetBlipAsShortRange(JobBlip, true)
+        BeginTextCommandSetBlipName("STRING")
+        AddTextComponentString('Warehouse Logistics')
+        EndTextCommandSetBlipName(JobBlip)
+    end
+end)
+
+RegisterNetEvent('QBCore:Client:OnPlayerUnload')
+AddEventHandler('QBCore:Client:OnPlayerUnload', function()
+    RemoveBlip(JobBlip)
 end)
   
 RegisterNetEvent('don-forklift:deliverypickup')
@@ -174,6 +201,21 @@ local function DrawText3Ds(x, y, z, text, shadow)
     ClearDrawOrigin()
 end
 
+function ForkliftBlip()
+    if not DoesBlipExist(ForkliftGarageBlip) then
+        ForkliftGarageBlip = AddBlipForCoord(Config.Forklift['Forklift'].Pos.x, Config.Forklift['Forklift'].Pos.y, Config.Forklift['Forklift'].Pos.z)
+        SetBlipSprite (ForkliftGarageBlip, 88)
+        SetBlipDisplay(ForkliftGarageBlip, 4)
+        SetBlipScale  (ForkliftGarageBlip, 0.4)
+        SetBlipColour (ForkliftGarageBlip, 28)
+        SetBlipAsShortRange(ForkliftGarageBlip, true)
+        BeginTextCommandSetBlipName("STRING")
+        AddTextComponentString('Forklift Parking')
+        EndTextCommandSetBlipName(ForkliftGarageBlip)
+    end
+end
+
+
 function LendVehicle(a)
     if OwnsHangar == 1 then
         if VehicleTaken == 0 then
@@ -229,7 +271,7 @@ Citizen.CreateThread(function()
         end
     end
 end)	
-  
+
 Citizen.CreateThread(function()
     while true do
         Citizen.Wait(3)
@@ -241,26 +283,42 @@ Citizen.CreateThread(function()
             if #(pos - vector3(Config.Forklift['Forklift'].Pos.x, Config.Forklift['Forklift'].Pos.y, Config.Forklift['Forklift'].Pos.z)) <= 25.0 or #(pos - vector3(Config.Forklift['Jobstart'].Pos.x, Config.Forklift['Jobstart'].Pos.y, Config.Forklift['Jobstart'].Pos.z)) <= 25.0 then
                 DrawMarker(27, Config.Forklift['Forklift'].Pos.x, Config.Forklift['Forklift'].Pos.y, Config.Forklift['Forklift'].Pos.z-1, 0.0, 0.0, 0.0, 0, 0.0, 0.0, 1.0, 1.0, 1.0, 143, 235, 77, 100, false, true, 2, false, false, false, false)
                 DrawMarker(27, Config.Forklift['Jobstart'].Pos.x, Config.Forklift['Jobstart'].Pos.y, Config.Forklift['Jobstart'].Pos.z-1, 0.0, 0.0, 0.0, 0, 0.0, 0.0, 1.0, 1.0, 1.0, 143, 235, 77, 100, false, true, 2, false, false, false, false)
+                if OwnsHangar == 1 then
+                    if #(pos - vector3(Config.Forklift['Forklift'].Pos.x, Config.Forklift['Forklift'].Pos.y, Config.Forklift['Forklift'].Pos.z)) <= 1.0 then
+                        if IsPedInAnyVehicle(PlayerPedId(), false) then
+                            DrawText3Ds(Config.Forklift['Forklift'].Pos.x, Config.Forklift['Forklift'].Pos.y, Config.Forklift['Forklift'].Pos.z, "[~r~E~w~] Store Forklift", 35)
+                            if IsControlJustPressed(0, Keys['E']) then 
+                                LendVehicle('1')
+                                Citizen.Wait(500)
+                            end
+                        else
+                            DrawText3Ds(Config.Forklift['Forklift'].Pos.x, Config.Forklift['Forklift'].Pos.y, Config.Forklift['Forklift'].Pos.z, "[~g~E~w~] Forklift", 35)
+                            if IsControlJustPressed(0, Keys['E']) then 
+                                LendVehicle('1')
+                                Citizen.Wait(500)
+                            end  
+                        end
+                    end
+                else
+                    if #(pos - vector3(Config.Forklift['Forklift'].Pos.x, Config.Forklift['Forklift'].Pos.y, Config.Forklift['Forklift'].Pos.z)) <= 5.0 then
+                        DrawText3Ds(Config.Forklift['Forklift'].Pos.x, Config.Forklift['Forklift'].Pos.y, Config.Forklift['Forklift'].Pos.z, "~r~You must be on duty~w~", 35)
+                    end
+                end
             else
                 Citizen.Wait(1500)
             end
-            
-            if #(pos - vector3(Config.Forklift['Forklift'].Pos.x, Config.Forklift['Forklift'].Pos.y, Config.Forklift['Forklift'].Pos.z)) <= 1.0 then
-                if IsPedInAnyVehicle(PlayerPedId(), false) then
-                    DrawText3Ds(Config.Forklift['Forklift'].Pos.x, Config.Forklift['Forklift'].Pos.y, Config.Forklift['Forklift'].Pos.z, "[~r~E~w~] Store Forklift", 35)
-                    if IsControlJustPressed(0, Keys['E']) then 
-                        LendVehicle('1')
-                        Citizen.Wait(500)
-                    end  
-                else
-                    DrawText3Ds(Config.Forklift['Forklift'].Pos.x, Config.Forklift['Forklift'].Pos.y, Config.Forklift['Forklift'].Pos.z, "[~g~E~w~] Forklift", 35)
-                    if IsControlJustPressed(0, Keys['E']) then 
-                        LendVehicle('1')
-                        Citizen.Wait(500)
-                    end  
-                end                
-            end
+        end
+    end
+end)
 
+Citizen.CreateThread(function()
+    while true do
+        Citizen.Wait(3)
+        
+        local ped = PlayerPedId()
+        local pos = GetEntityCoords(PlayerPedId(), true)
+        
+        if PlayerData.job ~= nil and PlayerData.job.name == 'logistics' then
             if #(pos - vector3(Config.Forklift['Jobstart'].Pos.x, Config.Forklift['Jobstart'].Pos.y, Config.Forklift['Jobstart'].Pos.z)) <= 1.0 and OwnsHangar == 1 then
                 DrawText3Ds(Config.Forklift['Jobstart'].Pos.x, Config.Forklift['Jobstart'].Pos.y, Config.Forklift['Jobstart'].Pos.z, "[~g~E~w~] Take order" ,35)
                 DrawText3Ds(Config.Forklift['Jobstart'].Pos.x, Config.Forklift['Jobstart'].Pos.y, Config.Forklift['Jobstart'].Pos.z-0.13, "[~r~G~w~] Go off Duty", 35)
@@ -277,6 +335,7 @@ Citizen.CreateThread(function()
                         backOpened = false
                         EngineOn = false
                         RemoveBlip(PalletBlip)
+                        RemoveBlip(ForkliftGarageBlip)
                         DeleteEntity(transport)
                         DeleteEntity(pilot)
                         DeleteEntity(Pallet)
@@ -288,13 +347,12 @@ Citizen.CreateThread(function()
                     ClearPedTasks(PlayerPedId())
                     QBCore.Functions.Notify('Delivery is marked...')
                 end
-            end
-
-            if #(pos - vector3(Config.Forklift['Jobstart'].Pos.x, Config.Forklift['Jobstart'].Pos.y, Config.Forklift['Jobstart'].Pos.z)) <= 1.0 and OwnsHangar == 0 then
+            elseif #(pos - vector3(Config.Forklift['Jobstart'].Pos.x, Config.Forklift['Jobstart'].Pos.y, Config.Forklift['Jobstart'].Pos.z)) <= 1.0 and OwnsHangar == 0 then
                 DrawText3Ds(Config.Forklift['Jobstart'].Pos.x, Config.Forklift['Jobstart'].Pos.y, Config.Forklift['Jobstart'].Pos.z, "[~g~G~w~] Go on Duty", 35)
                 if IsControlJustPressed(0, Keys['G']) then 
                     TriggerServerEvent("don-forklift:takeoverHangar", '1')
                     TriggerServerEvent("QBCore:ToggleDuty")
+                    ForkliftBlip()
                     Citizen.Wait(500)
                 end
             end
@@ -315,6 +373,7 @@ Citizen.CreateThread(function()
                 TriggerServerEvent("QBCore:ToggleDuty")
                 OwnsHangar = 0
                 RemoveBlip(PalletBlip)
+                RemoveBlip(ForkliftGarageBlip)
                 DeleteEntity(transport)
                 DeleteEntity(pilot)
                 DeleteEntity(Pallet)
