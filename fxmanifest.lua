@@ -1,13 +1,19 @@
 fx_version 'cerulean'
+game 'gta5'
 
-games { 'gta5' }
+author 'DonHulieo'
+description 'Warehousing Job for QBCore'
+version '1.1.0'
 
+shared_scripts {
+    'config.lua'
+}
+
+client_script {
+    'client/main.lua'
+}
 server_scripts {
-	'config.lua',
-	'server/main.lua'
+    'server/main.lua'
 }
 
-client_scripts {
-	'config.lua',
-	'client/main.lua'
-}
+lua54 'yes'

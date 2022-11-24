@@ -1,52 +1,68 @@
-Keys = {
-    ['ESC'] = 322, ['F1'] = 288, ['F2'] = 289, ['F3'] = 170, ['F5'] = 166, ['F6'] = 167, ['F7'] = 168, ['F8'] = 169, ['F9'] = 56, ['F10'] = 57,
-    ['~'] = 243, ['1'] = 157, ['2'] = 158, ['3'] = 160, ['4'] = 164, ['5'] = 165, ['6'] = 159, ['7'] = 161, ['8'] = 162, ['9'] = 163, ['-'] = 84, ['='] = 83, ['BACKSPACE'] = 177,
-    ['TAB'] = 37, ['Q'] = 44, ['W'] = 32, ['E'] = 38, ['R'] = 45, ['T'] = 245, ['Y'] = 246, ['U'] = 303, ['P'] = 199, ['['] = 39, [']'] = 40, ['ENTER'] = 18,
-    ['CAPS'] = 137, ['A'] = 34, ['S'] = 8, ['D'] = 9, ['F'] = 23, ['G'] = 47, ['H'] = 74, ['K'] = 311, ['L'] = 182,
-    ['LEFTSHIFT'] = 21, ['Z'] = 20, ['X'] = 73, ['C'] = 26, ['V'] = 0, ['B'] = 29, ['N'] = 249, ['M'] = 244, [','] = 82, ['.'] = 81,
-    ['LEFTCTRL'] = 36, ['LEFTALT'] = 19, ['SPACE'] = 22, ['RIGHTCTRL'] = 70,
-    ['HOME'] = 213, ['PAGEUP'] = 10, ['PAGEDOWN'] = 11, ['DEL'] = 178,
-    ['LEFT'] = 174, ['RIGHT'] = 175, ['TOP'] = 27, ['DOWN'] = 173,
-}
-
 Config = {}
 
-Config.MaxPayout = 22
-Config.MinPayout = 18
+Config.UseTarget = true -- Set to false if you want to use 3DText instead of QBTarget
 
-Config.Forklift = {
-	['Jobstart'] = { -- the place where you start and finish your work
-		Pos = {x = 1206.22, y = -3259.78, z = 5.5}, 
-		Size  = {x = 1.2, y = 1.2, z = 1.0},
-		Color = {r = 78, g = 2453, b = 175},
-		Type  = 25,
-	},
-	['Forklift'] = { -- the place where the company car appears
-		Pos = {x = 1201.55, y = -3287.51, z = 5.5}, 
-		Model  = 'forklift',
-	},
-	['DeliverySpawn'] = { -- the place where the benson spawns
-	Pos = {x = 1113.12, y = -3334.41, z = 5.92}, 
-	},
-	['DeliveryLoc'] = { -- the place where the pallets are delivered 
-	Pos = {x = 1229.2, y = -3222.6, z = 5.8}, 
-	}
+Config.Blips = true -- Enable blips on the map
+Config.BlipName = "Warehouse Logistics"
+Config.UniqueNames = true -- Enable unique names for each warehouse
+Config.RequiresJob = true -- Enable if you want to require a job to an order
+Config.Job = 'logistics' -- Job name
+Config.PalletModel = `prop_boxpile_06a` -- Pallet model
+
+Config.PayScales = {
+	min = 50, -- Minimum payout
+	max = 100, -- Maximum payout
+	bonus = 150, -- Bonus payout if the pallet is below 500 health but higher than 250
+	bonus2 = 200, -- Bonus payout if the pallet is below 750 health but higher than 500
+	bonus3 = 250, -- Bonus payout if the pallet is below 1000 health but higher than 750
+	fromSociety = false, -- Enable if you want to pay from the job's bank account
 }
 
-Config.Pallet ={
+Config.Locations = {
 	[1] = {
-		Pos = {x = 1190.23, y = -3306.25, z = 5.5},
+		jobStart = vector3(1206.38, -3258.93, 5.5), -- Where the player can take orders
+		boxzone = { -- Boxzone settings to allow for the most configurabilty 
+			length = 1.0,
+			width = 2.5,
+			heading = 0.0,
+		},
+		blipSettings = { -- Will use these settings for each blip if Config.UniqueNames is false, just not the label
+			sprite = 525,
+			color = 28,
+			scale = 0.6,
+			display = 4,
+			label = 'PostOp Warehouse',
+		},
+		garage = { -- Garage settings
+			model = `forklift`,
+			coords = vector3(1201.55, -3287.51, 5.5),
+			heading = 90.0,
+			zone = {
+				coords = vector3(1202.16, -3287.55, 5.5),
+				length = 3.0,
+				width = 2.0,
+				heading = 90.0,
+  
+			},
+		},
+		pickup = { -- Pickup settings ~~ I wouldn't change the vehicle as the function for finding the back is only setup for the benson ~~
+			coords = vector3(1113.12, -3334.41, 5.92),
+			heading = 266.6,
+			model = `benson`,
+			ped = `s_m_m_security_01`,
+		},
+		delivery = {  -- Where the Pickup vehicle will pickup the pallet
+			coords = vector3(1229.2, -3222.6, 5.8),
+			heading = 269.37,
+		},
+		pallets = { -- Pallet locations
+			[1] = vector3(1190.23, -3306.25, 5.5),
+			[2] = vector3(1199.31, -3308.33, 5.5),
+			[3] = vector3(1232.87, -3294.65, 5.5),
+			[4] = vector3(1191.27, -3274.08, 5.5),
+			[5] = vector3(1223.9, -3246.72, 5.5),
+		},
+		inUse = false, -- DO NOT TOUCH
+		user = nil, -- DO NOT TOUCH
 	},
-	[2] = {
-		Pos = {x = 1199.31, y = -3308.33, z = 5.5},
-	},
-	[3] = {
-		Pos = {x = 1232.87, y = -3294.65, z = 5.5},
-	},
-	[4] = {
-		Pos = {x = 1191.27, y = -3274.08, z = 5.5},
-	},
-	[5] = {
-		Pos = {x = 1223.9, y = -3246.72, z = 5.5},
-	}
 }

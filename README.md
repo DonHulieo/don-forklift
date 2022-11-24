@@ -1,26 +1,21 @@
-This work is licensed under a [Creative Commons Attribution-NonCommercial-ShareAlike 4.0
-International License][cc-by-nc-sa].
-
-[![CC BY-NC-SA 4.0][cc-by-nc-sa-image]][cc-by-nc-sa]
-
-[cc-by-nc-sa]: http://creativecommons.org/licenses/by-nc-sa/4.0/
-[cc-by-nc-sa-image]: https://licensebuttons.net/l/by-nc-sa/4.0/88x31.png
-[cc-by-nc-sa-shield]: https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg
-
 # don-forklift
 Warehousing script for QBCore
 
 ## Dependencies
 - [qb-core](https://github.com/qbcore-framework/qb-core)
-- [lj-fuel](https://github.com/loljoshie/lj-fuel)
+
+## Preview
+- [don-forklift](https://youtu.be/_WErvl12J_w)
 
 ## Features
-- Easily configurable locations and highly optimised
-- Locked to a job and has automatic duty cycles
+- Optimised Code, running at 0.0ms at rest and peaking at 0.2ms whilst using QBTarget, 0.6ms whilst using DrawText
+- Can be used for a specific job (set in the config) or for anyone as an activity
+- Can be configured for multiple warehouses (set in the config) ~ Currently only 1 is configured
+- Earn Bonus Money for completing the job without damaging the pallets
 - A percantage of money earned through deliveries is sent to the business society
 
 ## Job (qb-core/shared/jobs.lua)
-- Make sure to add below, or a similar version of, in your shared otherwise the job will not work.
+- Make sure to add below, or a similar version of, if using Config.RequiresJob.
 
 ```
 	["logistics"] = { 
@@ -72,12 +67,17 @@ Warehousing script for QBCore
 
 ## Job Locations
 
-All job locations are in the config, change these to your own MLO or use Ultrunz and Benz Warehouse, link below:
+- For the Warehouse used in the preview:
 
 - [Warehouse](https://ultrunz.com/store/warehouse)
 
-## Preview
-- [Youtube](https://youtu.be/_WErvl12J_w)
+- Keep in mind this is an expensive MLO and this newest update means you can change and add locations very easily.
 
-## Discord
-- [Join Discord](https://discord.gg/tVA58nbBuk)
+# Support
+
+This is not a QBCore script nor is it maintained by them, please refer to my discord for any issues! 
+- [discord](https://discord.gg/tVA58nbBuk)
+
+# Changelog
+
+- v1.1.0 - Started Changelog like a noob // Huge Update, now supports multiple warehouses, QBTarget and is much more optimised.
