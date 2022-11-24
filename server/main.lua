@@ -1,62 +1,51 @@
-QBCore = exports['qb-core']:GetCoreObject()
-local hangar1ID = nil
------------------------------------
+local QBCore = exports['qb-core']:GetCoreObject()
 
-AddEventHandler('playerDropped', function(DropReason)
-	if hangar1ID == source then
-		hangar1ID = nil
-	end
+local PlayerData = {}
+
+-------------------------------- HANDLERS --------------------------------
+
+RegisterNetEvent('QBCore:Client:OnPlayerLoaded')
+AddEventHandler('QBCore:Client:OnPlayerLoaded', function()
+    PlayerData = QBCore.Functions.GetPlayerData()
 end)
 
-RegisterServerEvent('don-forklift:takeoverHangar')
-AddEventHandler('don-forklift:takeoverHangar', function(duty)
-	if duty == '1' then
-		if hangar1ID == nil then
-			hangar1ID = source
-			TriggerClientEvent('QBCore:Notify', source, 'On duty...')
-			TriggerClientEvent("don-forklift:ownHangar", source)
-		else
-			TTriggerClientEvent('QBCore:Notify', source, 'There is already an employee, '..hangar1ID)
-		end
-	end
+RegisterNetEvent('QBCore:Client:OnPlayerUnload')
+AddEventHandler('QBCore:Client:OnPlayerUnload', function()
+    PlayerData = {}
 end)
 
-RegisterServerEvent('don-forklift:leaveHangar')
-AddEventHandler('don-forklift:leaveHangar', function(duty)
-	if duty == '1' then
-		if hangar1ID == source then
-			hangar1ID = nil
-			TriggerClientEvent('QBCore:Notify', source, 'Off duty...')
-			TriggerClientEvent("don-forklift:leftHangar", source)
-		else
-			TTriggerClientEvent('QBCore:Notify', source, 'There is already an employee, '..hangar1ID)
-		end
-	end
+AddEventHandler("onResourceStart", function(resource)
+    if GetCurrentResourceName() ~= resource then
+        return
+    end
 end)
 
-RegisterServerEvent('don-forklift:executionmission')
-AddEventHandler('don-forklift:executionmission', function(bonus)
+RegisterNetEvent('don-forklift:server:reserve')
+AddEventHandler('don-forklift:server:reserve', function(k, ped)
+    TriggerClientEvent('don-forklift:client:reserve', -1, k, ped)
+end)
+
+RegisterNetEvent('don-forklift:server:unreserve')
+AddEventHandler('don-forklift:server:unreserve', function(k)
+    TriggerClientEvent('don-forklift:client:unreserve', -1, k)
+end)
+
+RegisterNetEvent('don-forklift:server:payPlayer')
+AddEventHandler('don-forklift:server:payPlayer', function(bonus)
 	local src = source
-	local PayRate = math.random(Config.MinPayout, Config.MaxPayout)
 	local Player = QBCore.Functions.GetPlayer(src)
-	local societypay = math.ceil(PayRate * 4)
-
-	if bonus == 'bonus' then
-		Player.Functions.AddMoney("cash", PayRate)
-		TriggerClientEvent('QBCore:Notify', src, 'You get $'..PayRate..' for delivery', 'success')
-		TriggerEvent('qb-bossmenu:server:addAccountMoney', Player.PlayerData.job.name, societypay)
-		Wait(2500)
-	else
-		Player.Functions.AddMoney("cash", bonus)
-		Wait(2500)
+	local payRate = math.random(Config.PayScales.min, Config.PayScales.max)
+	local societypay = math.ceil(payRate * 4)
+	local job = Player.PlayerData.job.name
+	if bonus then
+		payRate = payRate + bonus
+	end
+	Player.Functions.AddMoney('cash', payRate, "forklift-job")
+	TriggerClientEvent('QBCore:Notify', src, 'You get $'..payRate..' for delivery', 'success')
+	if Config.RequiresJob then
+		exports['qb-management']:AddMoney(job, societypay)
+		if Config.PayScales.fromSociety then
+			exports['qb-management']:RemoveMoney(job, payRate)
+		end
 	end
 end)
-
-RegisterServerEvent('don-forklift:toofar')
-AddEventHandler('don-forklift:toofar', function()
-	if hangar1ID == source then
-		hangar1ID = nil
-	end
-end)
-
-
