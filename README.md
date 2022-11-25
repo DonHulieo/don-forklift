@@ -79,5 +79,5 @@ This is not a QBCore script nor is it maintained by them, please refer to my dis
 - [discord](https://discord.gg/tVA58nbBuk)
 
 # Changelog
-
+- v1.1.1 - Added Blips to the pickup vehicle, and fixed the issue with Config.RequiresJob blips.
 - v1.1.0 - Started Changelog like a noob // Huge Update, now supports multiple warehouses, QBTarget and is much more optimised.

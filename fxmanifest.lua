@@ -3,7 +3,7 @@ game 'gta5'
 
 author 'DonHulieo'
 description 'Warehousing Job for QBCore'
-version '1.1.0'
+version '1.1.1'
 
 shared_scripts {
     'config.lua'
