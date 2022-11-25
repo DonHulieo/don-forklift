@@ -74,6 +74,14 @@ local function deleteBlipForCoord(sprite, coords)
     end
 end
 
+local function deleteBlipForEntity(sprite, entity)
+    local blip = GetFirstBlipInfoId(sprite)
+    local blipEntity = GetBlipInfoIdEntityIndex(blip)
+    if blipEntity == entity then
+        RemoveBlip(blip)
+    end
+end
+
 local function createPalletBlip(entity)
     local blip = AddBlipForEntity(entity)
     SetBlipSprite(blip, 478)
@@ -84,6 +92,20 @@ local function createPalletBlip(entity)
     SetBlipAsShortRange(blip, true)
     AddTextEntry('Pallet', 'Pallet')
     BeginTextCommandSetBlipName('Pallet')
+    EndTextCommandSetBlipName(blip)
+    return blip
+end
+
+local function createPickupBlip(entity)
+    local blip = AddBlipForEntity(entity)
+    SetBlipSprite(blip, 67)
+    SetBlipCategory(blip, 2)
+    SetBlipDisplay(blip, 4)
+    SetBlipScale(blip, 0.8)
+    SetBlipColour(blip, 2)
+    SetBlipAsShortRange(blip, true)
+    AddTextEntry('Drop Off', 'Drop Off')
+    BeginTextCommandSetBlipName('Drop Off')
     EndTextCommandSetBlipName(blip)
     return blip
 end
@@ -141,6 +163,7 @@ local function spawnPickupVeh(location)
     reqMod(model)
     ClearAreaOfVehicles(coords, 15.0, false, false, false, false,  false)
     pickup = CreateVehicle(model, coords, Config.Locations[location].pickup.heading, true, true)
+    createPickupBlip(entity)
     SetEntityAsMissionEntity(pickup)
     SetVehicleDoorsLocked(pickup, 2)
     SetVehicleDoorsLockedForAllPlayers(pickup, true)
@@ -180,6 +203,8 @@ local function spawnPickupVeh(location)
                 TriggerEvent('don-forklift:client:finishDelivery', isDamaged)
             end
             DeleteEntity(pallet)
+            deleteBlipForEntity(478, pallet)
+            deleteBlipForEntity(67, pickup)
             listen4Load(location, pilot, pickup)
             doorOpened = false
         end
@@ -262,8 +287,14 @@ RegisterNetEvent('QBCore:Client:OnPlayerLoaded')
 AddEventHandler('QBCore:Client:OnPlayerLoaded', function()
     PlayerData = QBCore.Functions.GetPlayerData()
     for id, warehouse in pairs(Config.Locations) do
-        if (PlayerData.job.name == Config.Job and Config.Blips) or (not Config.RequiresJob and Config.Blips) then
-            createBlip(warehouse.jobStart, warehouse.blipSettings.label, warehouse.blipSettings.sprite, warehouse.blipSettings.color, warehouse.blipSettings.scale)
+        if Config.RequiresJob then
+            if PlayerData.job.name == Config.Job and Config.Blips then
+                createBlip(warehouse.jobStart, warehouse.blipSettings.label, warehouse.blipSettings.sprite, warehouse.blipSettings.color, warehouse.blipSettings.scale)
+            end
+        else
+            if Config.Blips then
+                createBlip(warehouse.jobStart, warehouse.blipSettings.label, warehouse.blipSettings.sprite, warehouse.blipSettings.color, warehouse.blipSettings.scale)
+            end
         end
     end
     if Config.UseTarget then
@@ -277,19 +308,27 @@ AddEventHandler('QBCore:Client:OnPlayerUnload', function()
     PlayerData = {}
     if Config.Blips then
         for id, warehouse in pairs(Config.Locations) do
-            deleteBlipForCoord(warehouse.jobStart, warehouse.blipSettings.sprite)
+            deleteBlipForCoord(warehouse.blipSettings.sprite, warehouse.jobStart)
         end
     end
 end)
 
 RegisterNetEvent('QBCore:Client:OnJobUpdate')
 AddEventHandler('QBCore:Client:OnJobUpdate', function(JobInfo)
-    PlayerData.job = JobInfo
     for id, warehouse in pairs(Config.Locations) do
-        if (PlayerData.job.name == Config.Job and Config.Blips) or (not Config.RequiresJob and Config.Blips) then
-            createBlip(warehouse.jobStart, warehouse.blipSettings.label, warehouse.blipSettings.sprite, warehouse.blipSettings.color, warehouse.blipSettings.scale)
+        if Config.RequiresJob then
+            if JobInfo.name == Config.Job then
+                PlayerData.job = JobInfo 
+                if Config.Blips then 
+                    createBlip(warehouse.jobStart, warehouse.blipSettings.label, warehouse.blipSettings.sprite, warehouse.blipSettings.color, warehouse.blipSettings.scale)
+                end
+            else
+                deleteBlipForCoord(warehouse.blipSettings.sprite, warehouse.jobStart)
+            end
         else
-            deleteBlipForCoord(warehouse.jobStart, warehouse.blipSettings.sprite)
+            if Config.Blips then 
+                createBlip(warehouse.jobStart, warehouse.blipSettings.label, warehouse.blipSettings.sprite, warehouse.blipSettings.color, warehouse.blipSettings.scale)
+            end
         end
     end
 end)
@@ -299,7 +338,7 @@ AddEventHandler('onResourceStop', function(resource)
         for id, warehouse in pairs(Config.Locations) do
             TriggerServerEvent("don-forklift:server:unreserve", id)
             if Config.ShowBlips then
-                deleteBlipForCoord(warehouse.jobStart, warehouse.blipSettings.sprite)
+                deleteBlipForCoord(warehouse.blipSettings.sprite, warehouse.jobStart)
             end
         end
     end
