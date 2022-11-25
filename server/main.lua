@@ -1,18 +1,6 @@
 local QBCore = exports['qb-core']:GetCoreObject()
 
-local PlayerData = {}
-
 -------------------------------- HANDLERS --------------------------------
-
-RegisterNetEvent('QBCore:Client:OnPlayerLoaded')
-AddEventHandler('QBCore:Client:OnPlayerLoaded', function()
-    PlayerData = QBCore.Functions.GetPlayerData()
-end)
-
-RegisterNetEvent('QBCore:Client:OnPlayerUnload')
-AddEventHandler('QBCore:Client:OnPlayerUnload', function()
-    PlayerData = {}
-end)
 
 AddEventHandler("onResourceStart", function(resource)
     if GetCurrentResourceName() ~= resource then
