@@ -1,6 +1,5 @@
 local QBCore = exports['qb-core']:GetCoreObject()
-local PlayerData = {}
-
+local PlayerData = QBCore.Functions.GetPlayerData()
 local pallet, pilot, pickup = nil, nil, nil
 local response, cancelled, jobFinished = false, false, false
 
@@ -196,13 +195,14 @@ local function spawnPickupVeh(location)
         local dist = #(doorCoords - palletCoords)
         if dist <= 2.0 then
             local isDamaged, health = isEntityDamaged(pallet)
-            SetVehicleDoorShut(pickup, 5, false)
             if isDamaged then
                 TriggerEvent('don-forklift:client:finishDelivery', isDamaged, health)
             else
                 TriggerEvent('don-forklift:client:finishDelivery', isDamaged)
             end
             DeleteEntity(pallet)
+            Citizen.Wait(2000)
+            SetVehicleDoorShut(pickup, 5, false)
             deleteBlipForEntity(478, pallet)
             deleteBlipForEntity(67, pickup)
             listen4Load(location, pilot, pickup)
@@ -384,7 +384,8 @@ end)
 RegisterNetEvent('don-forklift:client:startJob', function(location)
     local ped = PlayerPedId()
     local inUse = Config.Locations[location].inUse
-    if not inUse then
+    local user = Config.Locations[location].user
+    if not inUse or user == ped then
         if response then QBCore.Functions.Notify('Complete the previous order!', 'error') return end
         if Config.RequiresJob then 
             if not PlayerData.job then 
