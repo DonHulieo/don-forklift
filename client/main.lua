@@ -143,8 +143,9 @@ local function listen4Load(location, ped, veh)
             local vehCoords = GetEntityCoords(veh)
             local dist = #(coords - vehCoords)
             if dist < 200 then
-                Citizen.Wait(15000)
+                Wait(15000)
             else
+                -- deleteBlipForEntity(67, veh)
                 DeleteEntity(veh)
                 DeleteEntity(ped)
             end
@@ -162,7 +163,7 @@ local function spawnPickupVeh(location)
     reqMod(model)
     ClearAreaOfVehicles(coords, 15.0, false, false, false, false,  false)
     pickup = CreateVehicle(model, coords, Config.Locations[location].pickup.heading, true, true)
-    createPickupBlip(entity)
+    createPickupBlip(pickup)
     SetEntityAsMissionEntity(pickup)
     SetVehicleDoorsLocked(pickup, 2)
     SetVehicleDoorsLockedForAllPlayers(pickup, true)
@@ -174,12 +175,12 @@ local function spawnPickupVeh(location)
     SetDriveTaskDrivingStyle(ped, 263100)
     SetPedKeepTask(pilot, true)
     driving = true
-    Citizen.Wait(500)
+    Wait(500)
     while driving do
-        Citizen.Wait(1000)
+        Wait(1000)
         local eng = GetIsVehicleEngineRunning(pickup)
         if eng then
-            Citizen.Wait(500)
+            Wait(500)
         else
             driving = false
         end
@@ -189,7 +190,7 @@ local function spawnPickupVeh(location)
     doorOpened = true
     local doorCoords = GetOffsetFromEntityInWorldCoords(pickup, 0.0, -6.0, -1.0)
     while doorOpened do
-        Citizen.Wait(2)
+        Wait(2)
         DrawMarker(1, doorCoords, 0, 0, 0, 0, 0, 0, 1.7, 1.7, 1.7, 135, 31, 35, 150, 1, 0, 0, 0)
         local palletCoords = GetEntityCoords(pallet)
         local dist = #(doorCoords - palletCoords)
@@ -201,7 +202,7 @@ local function spawnPickupVeh(location)
                 TriggerEvent('don-forklift:client:finishDelivery', isDamaged)
             end
             DeleteEntity(pallet)
-            Citizen.Wait(2000)
+            Wait(2000)
             SetVehicleDoorShut(pickup, 5, false)
             deleteBlipForEntity(478, pallet)
             deleteBlipForEntity(67, pickup)
@@ -259,7 +260,7 @@ local function lendVehicle(location)
             QBCore.Functions.SpawnVehicle(model, function(vehicle)
                 SetVehicleNumberPlateText(vehicle, "FORK"..tostring(math.random(1000, 9999)))
                 SetEntityHeading(vehicle, heading)
-                exports['LegacyFuel']:SetFuel(vehicle, 100.0)
+                exports['don-fuel']:SetFuel(vehicle, 100.0)
                 TaskWarpPedIntoVehicle(PlayerPedId(), vehicle, -1)
                 SetEntityAsMissionEntity(vehicle, true, true)
                 TriggerEvent("vehiclekeys:client:SetOwner", GetVehicleNumberPlateText(vehicle))
@@ -402,6 +403,7 @@ RegisterNetEvent('don-forklift:client:startJob', function(location)
         TriggerServerEvent('don-forklift:server:reserve', location)
         Citizen.Wait(1000)
         ClearPedTasks(ped)
+        createBlip(Config.Locations[location].garage.coords, 'Forklift', 357, 28, 0.5)
         spawnPickupVeh(location)
     else
         QBCore.Functions.Notify('Someone is already doing this order!', 'error')
@@ -413,7 +415,7 @@ RegisterNetEvent('don-forklift:client:finishDelivery', function(isDamaged, healt
     response = false 
     QBCore.Functions.Notify('Package loaded..', 'success', 1500)
     if isDamaged then
-        Citizen.Wait(2500)
+        Wait(2500)
         if health < 1000 and health > 750 then
             QBCore.Functions.Notify('The product is almost pristine', 'success', 2000)
             TriggerServerEvent('don-forklift:server:payPlayer', Config.PayScales.bonus3)
@@ -428,7 +430,7 @@ RegisterNetEvent('don-forklift:client:finishDelivery', function(isDamaged, healt
         end
     else
         QBCore.Functions.Notify('The product is pristine', 'success')
-        TriggerServerEvent('don-forklift:server:payPlayer', Config.PayScales.bonus3+Config.PayScales.bonus2+Config.PayScales.bonus)
+        TriggerServerEvent('don-forklift:server:payPlayer', Config.PayScales.bonus3 + Config.PayScales.bonus2 + Config.PayScales.bonus)
     end
 end)
 
@@ -531,14 +533,14 @@ RegisterNetEvent('don-forklift:client:createGarage', function()
                     },
                     distance = 2.0, -- This is the distance for you to be at for the target to turn blue, this is in GTA units and has to be a float value
                 })
-            Citizen.Wait(3)
+            Wait(3)
         end
     end
 end)
 
 -------------------------------- THREADS --------------------------------
 
-Citizen.CreateThread(function()
+CreateThread(function()
     while not Config.UseTarget do 
         Citizen.Wait(3)
         for k, v in pairs(Config.Locations) do
@@ -557,15 +559,15 @@ Citizen.CreateThread(function()
                     TriggerEvent('don-forklift:client:cancelJob', k)
                 end
             else
-                Citizen.Wait(sleep)
+                Wait(sleep)
             end
         end
     end
 end)
 
-Citizen.CreateThread(function()
+CreateThread(function()
     while not Config.UseTarget do
-        Citizen.Wait(3)
+        Wait(3)
         for k, v in pairs(Config.Locations) do
             local sleep = 2000
             local ped = PlayerPedId()
@@ -584,7 +586,7 @@ Citizen.CreateThread(function()
                         lendVehicle(k)
                     end
                 else
-                    Citizen.Wait(sleep)
+                    Wait(sleep)
                 end
             end
         end
