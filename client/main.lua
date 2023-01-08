@@ -470,7 +470,7 @@ RegisterNetEvent('don-forklift:client:createTarget', function()
                         action = function ()
                                 TriggerEvent('don-forklift:client:startJob', k)   
                             end,
-                        canInteract = function() -- Checks if the gun range is in use
+                        canInteract = function() -- Checks if the warehouse is in use
                             if v.inUse and not jobFinished then return false end
                                 return true
                             end,
@@ -482,8 +482,8 @@ RegisterNetEvent('don-forklift:client:createTarget', function()
                         action = function ()
                                 TriggerEvent('don-forklift:client:cancelJob', k)   
                             end,
-                        canInteract = function() -- Checks if the gun range is in use
-                            if not isCurrentUserUsingWarehouse() then return false end
+                        canInteract = function() -- Checks if the warehouse is in use
+                            if not isCurrentUserUsingWarehouse() or jobFinished then return false end
                                 return true
                             end,
                         },
