@@ -8,6 +8,11 @@ Config.UniqueNames = true -- Enable unique names for each warehouse
 Config.RequiresJob = false -- Enable if you want to require a job to an order
 Config.Job = 'logistics' -- Job name
 Config.PalletModel = `prop_boxpile_06a` -- Pallet model
+Config.PalletMarkers = { -- Pallet markers | https://docs.fivem.net/docs/game-references/markers/ | Set to false to disable markers
+	type = 0,
+	color = {r = 240, g = 160, b = 1, a = 255},
+	scale = {x = 1.0, y = 1.0, z = 1.0},
+}
 
 Config.PayScales = {
 	min = 50, -- Minimum payout

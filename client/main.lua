@@ -45,6 +45,26 @@ local function DrawText3Ds(x, y, z, text)
     end
 end
 
+local function createMarker(entity)
+    if not DoesEntityExist(entity) then return end
+    marker = true
+    CreateThread(function()
+        while marker do
+            Wait(0)
+            local coords = GetEntityCoords(entity)
+            local z = coords.z
+            z = z + math.sin(GetGameTimer() / 300) / 20
+            DrawMarker(Config.PalletMarkers.type, coords.x, coords.y, z + 2, 0, 0, 0, 0, 0, 0, Config.PalletMarkers.scale.x, Config.PalletMarkers.scale.y, Config.PalletMarkers.scale.z, Config.PalletMarkers.color.r, Config.PalletMarkers.color.g, Config.PalletMarkers.color.b, Config.PalletMarkers.color.a, 0, 0, 0, 0, 0, 0, 0)
+            if #(GetEntityCoords(PlayerPedId()) - coords) < 2.0 then
+                marker = false
+            end
+            if not DoesEntityExist(entity) then
+                marker = false
+            end
+        end
+    end)
+end
+
 local function createBlip(coords, text, sprite, color, scale)
     if not coords then return end
     if Config.UniqueNames then
@@ -120,6 +140,7 @@ local function spawnPallet(location)
     SetEntityDynamic(pallet, true)
     SetEntityCollision(pallet, true, true)
     createPalletBlip(pallet)
+    if Config.PalletMarkers then createMarker(pallet) end
     return pallet
 end
 
@@ -145,7 +166,6 @@ local function listen4Load(location, ped, veh)
             if dist < 200 then
                 Wait(15000)
             else
-                -- deleteBlipForEntity(67, veh)
                 DeleteEntity(veh)
                 DeleteEntity(ped)
             end
@@ -179,8 +199,13 @@ local function spawnPickupVeh(location)
     while driving do
         Wait(1000)
         local eng = GetIsVehicleEngineRunning(pickup)
-        if eng then
+        if eng and not cancelled then
             Wait(500)
+        elseif cancelled then
+            deleteBlipForEntity(67, pickup)
+            listen4Load(location, pilot, pickup)
+            driving = false
+            return
         else
             driving = false
         end
@@ -211,8 +236,10 @@ local function spawnPickupVeh(location)
         end
         if cancelled then
             SetVehicleDoorShut(pickup, 5, false)
+            deleteBlipForEntity(67, pickup)
             listen4Load(location, pilot, pickup)
-            return 
+            doorOpened = false
+            return
         end
     end
 end
@@ -440,16 +467,14 @@ RegisterNetEvent('don-forklift:client:cancelJob', function(location)
         if Config.Locations[location].inUse and Config.Locations[location].user == ped then
             response = false
             cancelled = true
+            DeleteEntity(pallet)
+            deleteBlipForEntity(478, pallet)
             QBCore.Functions.Notify('You have cancelled the order', 'error')
             TriggerServerEvent('don-forklift:server:unreserve', location)
         else
             QBCore.Functions.Notify('You are not doing this order', 'error')
         end
     end
-end)
-
-RegisterNetEvent('don-forklift:client:spawnVeh', function(location)
-    lendVehicle(location)
 end)
 
 RegisterNetEvent('don-forklift:client:createTarget', function()
@@ -513,7 +538,7 @@ RegisterNetEvent('don-forklift:client:createGarage', function()
                         action = function()
                             lendVehicle(k)
                         end,
-                        canInteract = function() -- Checks if the gun range is in use
+                        canInteract = function() -- Checks if the warehouse is in use
                             if vehicleOut or not v.inUse then return false end
                                 return true
                             end,
@@ -525,7 +550,7 @@ RegisterNetEvent('don-forklift:client:createGarage', function()
                         action = function()
                             lendVehicle(k)
                         end,
-                        canInteract = function() -- Checks if the gun range is in use
+                        canInteract = function() -- Checks if the warehouse is in use
                             if not vehicleOut or not v.inUse then return false end
                                 return true
                             end,
