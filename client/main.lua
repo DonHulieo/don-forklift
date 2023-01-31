@@ -52,9 +52,7 @@ local function createMarker(entity)
         while marker do
             Wait(0)
             local coords = GetEntityCoords(entity)
-            local z = coords.z
-            z = z + math.sin(GetGameTimer() / 300) / 20
-            DrawMarker(Config.PalletMarkers.type, coords.x, coords.y, z + 2, 0, 0, 0, 0, 0, 0, Config.PalletMarkers.scale.x, Config.PalletMarkers.scale.y, Config.PalletMarkers.scale.z, Config.PalletMarkers.color.r, Config.PalletMarkers.color.g, Config.PalletMarkers.color.b, Config.PalletMarkers.color.a, 0, 0, 0, 0, 0, 0, 0)
+            DrawMarker(Config.PalletMarkers.type, coords.x, coords.y, coords.z + 2, 0, 0, 0, 0, 0, 0, Config.PalletMarkers.scale.x, Config.PalletMarkers.scale.y, Config.PalletMarkers.scale.z, Config.PalletMarkers.color.r, Config.PalletMarkers.color.g, Config.PalletMarkers.color.b, Config.PalletMarkers.color.a, true, true, 2, true, nil, nil, false)
             if #(GetEntityCoords(PlayerPedId()) - coords) < 2.0 then
                 marker = false
             end
