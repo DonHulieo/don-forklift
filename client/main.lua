@@ -600,12 +600,12 @@ CreateThread(function()
             if isUser then
                 if dist < 2.0 and not vehicleOut then
                     DrawText3Ds(v.garage.coords.x, v.garage.coords.y, v.garage.coords.z, '[~g~E~w~] - Take Forklift')
-                    if IsControlJustReleased(0, 38) then
+                    if IsControlJustReleased(0, 38) or IsDisabledControlJustReleased(0, 38) then
                         lendVehicle(k)
                     end
                 elseif dist < 2.0 and vehicleOut then
                     DrawText3Ds(v.garage.coords.x, v.garage.coords.y, v.garage.coords.z, '[~r~E~w~] - Return Forklift')
-                    if IsControlJustReleased(0, 38) then
+                    if IsControlJustReleased(0, 38) or IsDisabledControlJustReleased(0, 38) then
                         lendVehicle(k)
                     end
                 else
