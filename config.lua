@@ -11,7 +11,7 @@ Config.PalletModel = `prop_boxpile_06a` -- Pallet model
 Config.PalletMarkers = { -- Pallet markers | https://docs.fivem.net/docs/game-references/markers/ | Set to false to disable markers
 	type = 0,
 	color = {r = 240, g = 160, b = 1, a = 255},
-	scale = {x = 1.0, y = 1.0, z = 1.0},
+	scale = {x = 1.0, y = 1.0, z = 1.0}
 }
 
 Config.PayScales = {
@@ -20,7 +20,7 @@ Config.PayScales = {
 	bonus = 150, -- Bonus payout if the pallet is below 500 health but higher than 250
 	bonus2 = 200, -- Bonus payout if the pallet is below 750 health but higher than 500
 	bonus3 = 250, -- Bonus payout if the pallet is below 1000 health but higher than 750
-	fromSociety = false, -- Enable if you want to pay from the job's bank account
+	fromSociety = false -- Enable if you want to pay from the job's bank account
 }
 
 Config.Locations = {
@@ -29,14 +29,14 @@ Config.Locations = {
 		boxzone = { -- Boxzone settings to allow for the most configurabilty 
 			length = 1.0,
 			width = 2.5,
-			heading = 0.0,
+			heading = 0.0
 		},
 		blipSettings = { -- Will use these settings for each blip if Config.UniqueNames is false, just not the label
 			sprite = 525,
 			color = 28,
 			scale = 0.6,
 			display = 4,
-			label = 'PostOp Warehouse',
+			label = 'PostOp Warehouse'
 		},
 		garage = { -- Garage settings
 			model = `forklift`,
@@ -46,28 +46,28 @@ Config.Locations = {
 				coords = vector3(1202.16, -3287.55, 5.5),
 				length = 3.0,
 				width = 2.0,
-				heading = 90.0,
+				heading = 90.0
   
-			},
+			}
 		},
 		pickup = { -- Pickup settings ~~ I wouldn't change the vehicle as the function for finding the back is only setup for the benson ~~
 			coords = vector3(1113.12, -3334.41, 5.92),
 			heading = 266.6,
 			model = `benson`,
-			ped = `s_m_m_security_01`,
+			ped = `s_m_m_security_01`
 		},
 		delivery = {  -- Where the Pickup vehicle will pickup the pallet
 			coords = vector3(1229.2, -3222.6, 5.8),
-			heading = 269.37,
+			heading = 269.37
 		},
 		pallets = { -- Pallet locations
 			[1] = vector3(1190.23, -3306.25, 5.5),
 			[2] = vector3(1199.31, -3308.33, 5.5),
 			[3] = vector3(1232.87, -3294.65, 5.5),
 			[4] = vector3(1191.27, -3274.08, 5.5),
-			[5] = vector3(1223.9, -3246.72, 5.5),
+			[5] = vector3(1223.9, -3246.72, 5.5)
 		},
 		inUse = false, -- DO NOT TOUCH
-		user = nil, -- DO NOT TOUCH
-	},
+		user = nil -- DO NOT TOUCH
+	}
 }

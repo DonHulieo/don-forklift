@@ -1,25 +1,16 @@
 local QBCore = exports['qb-core']:GetCoreObject()
 
--------------------------------- HANDLERS --------------------------------
+-------------------------------- EVENTS --------------------------------
 
-AddEventHandler("onResourceStart", function(resource)
-    if GetCurrentResourceName() ~= resource then
-        return
-    end
+RegisterServerEvent('don-forklift:server:reserve', function(k, ped)
+  TriggerClientEvent('don-forklift:client:reserve', -1, k, ped)
 end)
 
-RegisterNetEvent('don-forklift:server:reserve')
-AddEventHandler('don-forklift:server:reserve', function(k, ped)
-    TriggerClientEvent('don-forklift:client:reserve', -1, k, ped)
+RegisterServerEvent('don-forklift:server:unreserve', function(k)
+  TriggerClientEvent('don-forklift:client:unreserve', -1, k)
 end)
 
-RegisterNetEvent('don-forklift:server:unreserve')
-AddEventHandler('don-forklift:server:unreserve', function(k)
-    TriggerClientEvent('don-forklift:client:unreserve', -1, k)
-end)
-
-RegisterNetEvent('don-forklift:server:payPlayer')
-AddEventHandler('don-forklift:server:payPlayer', function(bonus)
+RegisterServerEvent('don-forklift:server:payPlayer', function(bonus)
 	local src = source
 	local Player = QBCore.Functions.GetPlayer(src)
 	local payRate = math.random(Config.PayScales.min, Config.PayScales.max)
