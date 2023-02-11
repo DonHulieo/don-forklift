@@ -6,7 +6,11 @@ description 'Warehousing Job for QBCore'
 version '1.1.3'
 
 shared_scripts {'config.lua'}
-client_script {'client/main.lua'}
+
+client_scripts {'client/main.lua'}
+
 server_scripts {'server/main.lua'}
+
+dependencies {'qb-core'}
 
 lua54 'yes'
