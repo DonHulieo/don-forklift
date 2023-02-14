@@ -143,21 +143,75 @@ local function isEntityDamaged(entity)
   end
 end
 
+local function getPlayerCoords()
+  local players = GetActivePlayers()
+  local coords = {}
+  for k, v in ipairs(players) do
+    local ped = GetPlayerPed(v)
+    local pedCoords = GetEntityCoords(ped)
+    coords[#coords + 1] = pedCoords
+  end
+  return coords
+end
+
+local function isSafe(newCoords)
+  local coords = getPlayerCoords()
+  for i = 1, #coords do
+    local dist = #(newCoords - coords[i])
+    if dist < 150 then
+      return false
+    end
+  end
+  return true
+end
+
+local function getSafeDelivCoords()
+  local coords = GetEntityCoords(PlayerPedId())
+  newCoords = coords + vector3(math.random(1, 100), math.random(1, 100), math.random(1, 20))
+  repeat 
+    Wait(0) 
+    newCoords = newCoords + vector3(math.random(1, 100), math.random(1, 100), math.random(1, 20))
+  until isSafe(newCoords)
+  local _, node = GetClosestVehicleNode(newCoords.x, newCoords.y, newCoords.z, 1, 3.0, 0)
+  newCoords = node
+  return newCoords
+end
+
 local loaded = false
-local function listen4Load(location, ped, veh)
-  local loaded = true
-  local coords = Config.Locations[location].delivery.coords
+local function listen4Load(ped, veh)
+  local deliv = getSafeDelivCoords()
+  local sleep = 5000
+  local count = 0
+  local lastCoords = nil
+  loaded = true
+  TaskVehicleDriveToCoordLongrange(ped, veh, deliv, 20.0, 538968487, 5.0)
   CreateThread(function()
     while loaded do
-      Wait(500)
-      TaskVehicleDriveWander(ped, veh, 20.0, 538968487)
-      local vehCoords = GetEntityCoords(veh)
-      local dist = #(coords - vehCoords)
-      if dist < 200 then
-        Wait(15000)
+      Wait(sleep)
+      local coords = GetEntityCoords(veh)
+      local dist = #(coords - deliv)
+      sleep = 5000
+      lastCoords = coords
+      if dist < 10.0 then
+        if isSafe(coords) then
+          DeleteEntity(veh)
+          DeleteEntity(ped)
+          loaded = false
+        else 
+          deliv = getSafeDelivCoords()
+          TaskVehicleDriveToCoordLongrange(ped, veh, deliv, 20.0, 538968487, 5.0)
+          sleep = 30000
+        end
+      end
+      if lastCoords == coords or #(coords - lastCoords) < 5.0 then
+        count = count + 1
+        if count > 5 then
+          deliv = getSafeDelivCoords()
+          TaskVehicleDriveToCoordLongrange(ped, veh, deliv, 20.0, 538968487, 5.0)
+          sleep = 30000
+        end
       else
-        DeleteEntity(veh)
-        DeleteEntity(ped)
+        count = 0
       end
     end
   end)
@@ -195,7 +249,7 @@ local function spawnPickupVeh(location)
       Wait(500)
     elseif cancelled then
       deleteBlipForEntity(67, pickup)
-      listen4Load(location, pilot, pickup)
+      listen4Load(pilot, pickup)
       driving = false
       return
     else
@@ -223,22 +277,21 @@ local function spawnPickupVeh(location)
       SetVehicleDoorShut(pickup, 5, false)
       deleteBlipForEntity(478, pallet)
       deleteBlipForEntity(67, pickup)
-      listen4Load(location, pilot, pickup)
       doorOpened = false
     end
     if cancelled then
       SetVehicleDoorShut(pickup, 5, false)
       deleteBlipForEntity(67, pickup)
-      listen4Load(location, pilot, pickup)
       doorOpened = false
       return
     end
   end
+  listen4Load(pilot, pickup)
 end
 
-local function getClosestWarehouse()
-  local ped = PlayerPedId()
-  local coords = GetEntityCoords(ped)
+local function getClosestWarehouse(ped, coords)
+  local ped = PlayerPedId() or ped
+  local coords = GetEntityCoords(ped) or coords
   local current = nil
   local dist = nil
   for id, warehouse in pairs(Config.Locations) do
@@ -256,9 +309,9 @@ local function getClosestWarehouse()
 end
 
 local function isCurrentUserUsingWarehouse()
-  local ped = PlayerPedId()
+  local identifier = PlayerData.citizenid
   local current, dist = getClosestWarehouse()
-  if Config.Locations[current].user == ped then return true end
+  if Config.Locations[current].inUse and Config.Locations[current].user == identifier then return true end
   return false
 end
 
@@ -359,6 +412,7 @@ end)
 
 AddEventHandler('onResourceStart', function(resource)
   if resource == GetCurrentResourceName() then
+    getSafeDelivCoords()
     for id, warehouse in pairs(Config.Locations) do
       TriggerServerEvent('don-forklift:server:unreserve', id)
       if (not Config.RequiresJob and Config.Blips) then
@@ -372,9 +426,10 @@ end)
 
 RegisterNetEvent('don-forklift:client:startJob', function(location)
   local ped = PlayerPedId()
+  local identifier = PlayerData.citizenid
   local inUse = Config.Locations[location].inUse
   local user = Config.Locations[location].user
-  if not inUse or user == ped then
+  if not inUse or user == identifier then
     if response then QBCore.Functions.Notify('Complete the previous order!', 'error') return end
     if Config.RequiresJob then 
       if not PlayerData.job then 
@@ -382,13 +437,12 @@ RegisterNetEvent('don-forklift:client:startJob', function(location)
         return 
       end
     end
-    TriggerServerEvent('don-forklift:server:reserve', location, ped)
+    TriggerServerEvent('don-forklift:server:reserve', location)
     cancelled = false
     spawnPallet(location)
     response = true
     TaskStartScenarioInPlace(ped, "WORLD_HUMAN_CLIPBOARD", 0, false)
     QBCore.Functions.Notify('Delivery is marked...', 'success', 2500)
-    TriggerServerEvent('don-forklift:server:reserve', location)
     Wait(1000)
     ClearPedTasks(ped)
     createBlip(Config.Locations[location].garage.coords, 'Forklift', 357, 28, 0.5)
@@ -423,9 +477,8 @@ RegisterNetEvent('don-forklift:client:finishDelivery', function(isDamaged, healt
 end)
 
 RegisterNetEvent('don-forklift:client:cancelJob', function(location)
-  local ped = PlayerPedId()
   if location then
-    if Config.Locations[location].inUse and Config.Locations[location].user == ped then
+    if isCurrentUserUsingWarehouse() then
       response = false
       cancelled = true
       DeleteEntity(pallet)
@@ -438,12 +491,12 @@ RegisterNetEvent('don-forklift:client:cancelJob', function(location)
   end
 end)
 
-RegisterNetEvent('don-forklift:client:reserve', function(k, ped)
+RegisterNetEvent('don-forklift:client:reserve', function(k, identifier)
   if k then
     if Config.Locations[k] then
       if not Config.Locations[k].user and not Config.Locations[k].inUse then
         Config.Locations[k].inUse = true
-        Config.Locations[k].user = ped
+        Config.Locations[k].user = identifier
       end
     end
   end
@@ -539,21 +592,25 @@ end
 
 CreateThread(function()
   while not Config.UseTarget do 
-    Wait(0)
-    for k, v in pairs(Config.Locations) do
-      local sleep = 2000
-      local ped = PlayerPedId()
-      local coords = GetEntityCoords(ped)
-      local dist = #(coords - v.jobStart)
-      if dist < 2.0 and (not v.inUse or jobFinished) then
-        drawText3Ds(v.jobStart.x, v.jobStart.y, v.jobStart.z, '[~g~E~w~] - Take Order')
-        if IsControlJustReleased(0, 38) or IsDisabledControlJustReleased(0, 38) then
-          TriggerEvent('don-forklift:client:startJob', k)
-        end
-      elseif dist < 2.0 and isCurrentUserUsingWarehouse() and not jobFinished then
-        drawText3Ds(v.jobStart.x, v.jobStart.y, v.jobStart.z, '[~r~E~w~] - Cancel Order')
-        if IsControlJustReleased(0, 38) or IsDisabledControlJustReleased(0, 38) then
-          TriggerEvent('don-forklift:client:cancelJob', k)
+    Wait(sleep)
+    local sleep = 3000
+    local current, dist = getClosestWarehouse()
+    if Config.Locations[current] then
+      if dist < 5.0 then
+        local ped = PlayerPedId()
+        local coords = GetEntityCoords(ped)
+        if not Config.Locations[current].inUse or jobFinished then
+          sleep = 0
+          drawText3Ds(Config.Locations[current].jobStart.x, Config.Locations[current].jobStart.y, Config.Locations[current].jobStart.z, '[~g~E~w~] - Take Order')
+          if IsControlJustReleased(0, 38) or IsDisabledControlJustReleased(0, 38) then
+            TriggerEvent('don-forklift:client:startJob', current)
+          end
+        elseif isCurrentUserUsingWarehouse() and not jobFinished then
+          sleep = 0
+          drawText3Ds(Config.Locations[current].jobStart.x, Config.Locations[current].jobStart.y, Config.Locations[current].jobStart.z, '[~r~E~w~] - Cancel Order')
+          if IsControlJustReleased(0, 38) or IsDisabledControlJustReleased(0, 38) then
+            TriggerEvent('don-forklift:client:cancelJob', current)
+          end
         end
       else
         Wait(sleep)
@@ -565,26 +622,31 @@ end)
 CreateThread(function()
   while not Config.UseTarget do
     Wait(0)
-    for k, v in pairs(Config.Locations) do
-      local sleep = 2000
-      local ped = PlayerPedId()
-      local isUser = isCurrentUserUsingWarehouse()
-      local coords = GetEntityCoords(ped)
-      local dist = #(coords - v.garage.coords)
-      if isUser then
-        if dist < 2.0 and not vehicleOut then
-          drawText3Ds(v.garage.coords.x, v.garage.coords.y, v.garage.coords.z, '[~g~E~w~] - Take Forklift')
-          if IsControlJustReleased(0, 38) or IsDisabledControlJustReleased(0, 38) then
-            lendVehicle(k)
-          end
-        elseif dist < 2.0 and vehicleOut then
-          drawText3Ds(v.garage.coords.x, v.garage.coords.y, v.garage.coords.z, '[~r~E~w~] - Return Forklift')
-          if IsControlJustReleased(0, 38) or IsDisabledControlJustReleased(0, 38) then
-            lendVehicle(k)
+    local sleep = 3000
+    local current, dist = getClosestWarehouse()
+    if Config.Locations[current] then
+      if isCurrentUserUsingWarehouse() then
+        local ped = PlayerPedId()
+        local coords = GetEntityCoords(ped)
+        local dist = #(coords - Config.Locations[current].garage.coords)
+        if dist < 5.0 then
+          sleep = 0
+          if not vehicleOut then
+            drawText3Ds(Config.Locations[current].garage.coords.x, Config.Locations[current].garage.coords.y, Config.Locations[current].garage.coords.z, '[~g~E~w~] - Take Forklift')
+            if IsControlJustReleased(0, 38) or IsDisabledControlJustReleased(0, 38) then
+              lendVehicle(current)
+            end
+          elseif vehicleOut then
+            drawText3Ds(Config.Locations[current].garage.coords.x, Config.Locations[current].garage.coords.y, Config.Locations[current].garage.coords.z, '[~r~E~w~] - Return Forklift')
+            if IsControlJustReleased(0, 38) or IsDisabledControlJustReleased(0, 38) then
+              lendVehicle(current)
+            end
           end
         else
           Wait(sleep)
         end
+      else
+        Wait(sleep)
       end
     end
   end

@@ -2,12 +2,27 @@ local QBCore = exports['qb-core']:GetCoreObject()
 
 -------------------------------- EVENTS --------------------------------
 
-RegisterServerEvent('don-forklift:server:reserve', function(k, ped)
-  TriggerClientEvent('don-forklift:client:reserve', -1, k, ped)
+RegisterServerEvent('don-forklift:server:reserve', function(k)
+	local src = source
+	local Player = QBCore.Functions.GetPlayer(src)
+	if not Player then return end
+	if Config.RequiresJob and Player.PlayerData.job.name ~= Config.Job then return end
+	local identifier = Player.PlayerData.citizenid
+  	TriggerClientEvent('don-forklift:client:reserve', -1, k, identifier)
+	Config.Locations[k].inUse = true
+	Config.Locations[k].user = identifier
 end)
 
 RegisterServerEvent('don-forklift:server:unreserve', function(k)
-  TriggerClientEvent('don-forklift:client:unreserve', -1, k)
+	local src = source
+	local Player = QBCore.Functions.GetPlayer(src)
+	if not Player then return end
+	if Config.RequiresJob and Player.PlayerData.job.name ~= Config.Job then return end
+	local identifier = Player.PlayerData.citizenid
+	if Config.Locations[k].user ~= identifier then return end
+  	TriggerClientEvent('don-forklift:client:unreserve', -1, k)
+	Config.Locations[k].inUse = false
+	Config.Locations[k].user = nil
 end)
 
 RegisterServerEvent('don-forklift:server:payPlayer', function(bonus)
