@@ -1,42 +1,59 @@
 local QBCore = exports['qb-core']:GetCoreObject()
 local PlayerData = QBCore.Functions.GetPlayerData()
-local pallet, pilot, pickup = nil, nil, nil
 local response, cancelled, jobFinished = false, false, false
 
 -------------------------------- FUNCTIONS --------------------------------
 
-local function reqAnimDict(animDict)
-  RequestAnimDict(animDict)
-  repeat Wait(0) until HasAnimDictLoaded(animDict)
+---@param dict string
+local function reqAnimDict(dict)
+  if HasAnimDictLoaded(dict) or not dict then return end
+  RequestAnimDict(dict)
+  repeat Wait(0) until HasAnimDictLoaded(dict)
 end
 
+---@param model string|number
 local function reqMod(model)
+  if type(model) ~= 'number' then model = joaat(model) end
+  if HasModelLoaded(model) or not model then return end
   RequestModel(model)
   repeat Wait(0) until HasModelLoaded(model)
 end
 
-local function drawText3Ds(x, y, z, text)
+---@param x number @x coord
+---@param y number @y coord
+---@param z number @z coord
+---@param text string @text to draw
+local function drawText3D(x, y, z, text)
+  if type(x) == 'vector3' then
+    text = y
+    x, y, z = x.x, x.y, x.z
+  end
+
   local onScreen, _x, _y = World3dToScreen2d(x, y, z)
-  local pX, pY, pZ = table.unpack(GetGameplayCamCoords())
-  local scale = 0.35
+  local coords = GetFinalRenderedCamCoord()
+  local dist = #(coords - vector3(x, y, z))
+  local scale = (1 / dist) * 1.25
+  local fov = (1 / GetGameplayCamFov()) * 100
+  local scale = scale * fov
+
   if onScreen then
-    SetTextScale(scale, scale)
+    SetTextScale(0.0 * scale, 0.55 * scale)
     SetTextFont(4)
-    SetTextProportional(1)
+    SetTextProportional(true)
     SetTextColour(255, 255, 255, 215)
     SetTextDropshadow(0, 0, 0, 0, 255)
-    SetTextEdge(1, 0, 0, 0, 255)
+    SetTextEdge(2, 0, 0, 0, 150)
     SetTextDropShadow()
     SetTextOutline()
-    SetTextEntry("STRING")
-    SetTextCentre(1)
+    SetTextEntry('STRING')
+    SetTextCentre(true)
     AddTextComponentString(text)
     EndTextCommandDisplayText(_x, _y)
-    local factor = (string.len(text)) / 370
-    DrawRect(_x, _y + 0.0125, 0.015 + factor, 0.03, 41, 11, 41, 100)
   end
 end
 
+local marker = false
+---@param entity Entity @entity to create marker for
 local function createMarker(entity)
   if not DoesEntityExist(entity) then return end
   marker = true
@@ -45,7 +62,7 @@ local function createMarker(entity)
       Wait(0)
       local coords = GetEntityCoords(entity)
       DrawMarker(Config.PalletMarkers.type, coords.x, coords.y, coords.z + 2, 0, 0, 0, 0, 0, 0, Config.PalletMarkers.scale.x, Config.PalletMarkers.scale.y, Config.PalletMarkers.scale.z, Config.PalletMarkers.color.r, Config.PalletMarkers.color.g, Config.PalletMarkers.color.b, Config.PalletMarkers.color.a, true, true, 2, true, nil, nil, false)
-      if #(GetEntityCoords(PlayerPedId()) - coords) < 2.0 then
+      if #(GetEntityCoords(PlayerPedId()) - coords) < 3.5 then
         marker = false
       end
       if not DoesEntityExist(entity) then
@@ -55,6 +72,12 @@ local function createMarker(entity)
   end)
 end
 
+---@param coords vector3
+---@param text string
+---@param sprite number
+---@param color number
+---@param scale number
+---@return number|nil blip 
 local function createBlip(coords, text, sprite, color, scale)
   if not coords then return end
   if Config.UniqueNames then
@@ -75,6 +98,8 @@ local function createBlip(coords, text, sprite, color, scale)
   return blip
 end
 
+---@param sprite number
+---@param coords vector3
 local function deleteBlipForCoord(sprite, coords)
   local blip = GetFirstBlipInfoId(sprite)
   local blipCoords = GetBlipInfoIdCoord(blip)
@@ -83,6 +108,8 @@ local function deleteBlipForCoord(sprite, coords)
   end
 end
 
+---@param sprite number
+---@param entity number
 local function deleteBlipForEntity(sprite, entity)
   local blip = GetFirstBlipInfoId(sprite)
   local blipEntity = GetBlipInfoIdEntityIndex(blip)
@@ -91,6 +118,8 @@ local function deleteBlipForEntity(sprite, entity)
   end
 end
 
+---@param entity number
+---@return number blip
 local function createPalletBlip(entity)
   local blip = AddBlipForEntity(entity)
   SetBlipSprite(blip, 478)
@@ -105,6 +134,8 @@ local function createPalletBlip(entity)
   return blip
 end
 
+---@param entity number
+---@return number blip
 local function createPickupBlip(entity)
   local blip = AddBlipForEntity(entity)
   SetBlipSprite(blip, 67)
@@ -119,6 +150,8 @@ local function createPickupBlip(entity)
   return blip
 end
 
+---@param location number
+---@return number
 local function spawnPallet(location)
   local rand = math.random(1, #Config.Locations[location].pallets)
   local coords = Config.Locations[location].pallets[rand]
@@ -134,6 +167,8 @@ local function spawnPallet(location)
   return pallet
 end
 
+---@param entity number
+---@return boolean, number isDamaged, health
 local function isEntityDamaged(entity)
   local health = GetEntityHealth(entity)
   if health < 1000 then
@@ -143,6 +178,7 @@ local function isEntityDamaged(entity)
   end
 end
 
+---@return table
 local function getPlayerCoords()
   local players = GetActivePlayers()
   local coords = {}
@@ -154,10 +190,12 @@ local function getPlayerCoords()
   return coords
 end
 
-local function isSafe(newCoords)
-  local coords = getPlayerCoords()
-  for i = 1, #coords do
-    local dist = #(newCoords - coords[i])
+---@param coords vector3
+---@return boolean
+local function isSafe(coords)
+  local players = getPlayerCoords()
+  for i = 1, #players do
+    local dist = #(coords - players[i])
     if dist < 150 then
       return false
     end
@@ -165,6 +203,7 @@ local function isSafe(newCoords)
   return true
 end
 
+---@return vector3
 local function getSafeDelivCoords()
   local coords = GetEntityCoords(PlayerPedId())
   newCoords = coords + vector3(math.random(1, 100), math.random(1, 100), math.random(1, 20))
@@ -178,6 +217,8 @@ local function getSafeDelivCoords()
 end
 
 local loaded = false
+---@param ped number
+---@param veh number
 local function listen4Load(ped, veh)
   local deliv = getSafeDelivCoords()
   local sleep = 5000
@@ -203,9 +244,10 @@ local function listen4Load(ped, veh)
           sleep = 30000
         end
       end
+      print(coords, deliv, dist)
       if lastCoords == coords or #(coords - lastCoords) < 5.0 then
         count = count + 1
-        if count > 5 then
+        if count > 10 then
           deliv = getSafeDelivCoords()
           TaskVehicleDriveToCoordLongrange(ped, veh, deliv, 20.0, 538968487, 5.0)
           sleep = 30000
@@ -217,7 +259,9 @@ local function listen4Load(ped, veh)
   end)
 end
 
-local function spawnPickupVeh(location)
+---@param location number
+---@param pallet number
+local function spawnPickupVeh(location, pallet)
   local coords = Config.Locations[location].pickup.coords
   local deliv = Config.Locations[location].delivery.coords
   local model = Config.Locations[location].pickup.model
@@ -226,13 +270,13 @@ local function spawnPickupVeh(location)
   local doorOpened = false
   reqMod(model)
   ClearAreaOfVehicles(coords, 15.0, false, false, false, false,  false)
-  pickup = CreateVehicle(model, coords, Config.Locations[location].pickup.heading, true, true)
+  local pickup = CreateVehicle(model, coords, Config.Locations[location].pickup.heading, true, true)
   createPickupBlip(pickup)
   SetEntityAsMissionEntity(pickup)
   SetVehicleDoorsLocked(pickup, 2)
   SetVehicleDoorsLockedForAllPlayers(pickup, true)
   reqMod(pedMod)
-  pilot = CreatePedInsideVehicle(pickup, 1, pedMod, -1, true, true)
+  local pilot = CreatePedInsideVehicle(pickup, 1, pedMod, -1, true, true)
   SetBlockingOfNonTemporaryEvents(pilot, true)
   SetEntityInvincible(pilot, true)
   SetDriverAbility(pilot, 1.0) 
@@ -250,6 +294,8 @@ local function spawnPickupVeh(location)
     elseif cancelled then
       deleteBlipForEntity(67, pickup)
       listen4Load(pilot, pickup)
+      DeleteEntity(pallet)
+      deleteBlipForEntity(478, pallet)
       driving = false
       return
     else
@@ -273,15 +319,17 @@ local function spawnPickupVeh(location)
         TriggerEvent('don-forklift:client:finishDelivery', isDamaged)
       end
       DeleteEntity(pallet)
+      deleteBlipForEntity(478, pallet)
       Wait(2000)
       SetVehicleDoorShut(pickup, 5, false)
-      deleteBlipForEntity(478, pallet)
       deleteBlipForEntity(67, pickup)
       doorOpened = false
     end
     if cancelled then
       SetVehicleDoorShut(pickup, 5, false)
       deleteBlipForEntity(67, pickup)
+      deleteBlipForEntity(478, pallet)
+      DeleteEntity(pallet)
       doorOpened = false
       return
     end
@@ -289,6 +337,9 @@ local function spawnPickupVeh(location)
   listen4Load(pilot, pickup)
 end
 
+---@param ped number
+---@param coords vector3
+---@return boolean, number 
 local function getClosestWarehouse(ped, coords)
   local ped = PlayerPedId() or ped
   local coords = GetEntityCoords(ped) or coords
@@ -308,6 +359,7 @@ local function getClosestWarehouse(ped, coords)
   return current, dist
 end
 
+---@return boolean isUser
 local function isCurrentUserUsingWarehouse()
   local identifier = PlayerData.citizenid
   local current, dist = getClosestWarehouse()
@@ -315,6 +367,7 @@ local function isCurrentUserUsingWarehouse()
   return false
 end
 
+---@param location number
 local function lendVehicle(location)
   local ped = PlayerPedId()
   local coords = Config.Locations[location].garage.coords
@@ -438,15 +491,16 @@ RegisterNetEvent('don-forklift:client:startJob', function(location)
       end
     end
     TriggerServerEvent('don-forklift:server:reserve', location)
+    local pallet = spawnPallet(location)
+    jobFinished = false
     cancelled = false
-    spawnPallet(location)
     response = true
     TaskStartScenarioInPlace(ped, "WORLD_HUMAN_CLIPBOARD", 0, false)
     QBCore.Functions.Notify('Delivery is marked...', 'success', 2500)
     Wait(1000)
     ClearPedTasks(ped)
     createBlip(Config.Locations[location].garage.coords, 'Forklift', 357, 28, 0.5)
-    spawnPickupVeh(location)
+    spawnPickupVeh(location, pallet)
   else
     QBCore.Functions.Notify('Someone is already doing this order!', 'error')
   end
@@ -481,8 +535,6 @@ RegisterNetEvent('don-forklift:client:cancelJob', function(location)
     if isCurrentUserUsingWarehouse() then
       response = false
       cancelled = true
-      DeleteEntity(pallet)
-      deleteBlipForEntity(478, pallet)
       QBCore.Functions.Notify('You have cancelled the order', 'error')
       TriggerServerEvent('don-forklift:server:unreserve', location)
     else
@@ -601,15 +653,28 @@ CreateThread(function()
         local coords = GetEntityCoords(ped)
         if not Config.Locations[current].inUse or jobFinished then
           sleep = 0
-          drawText3Ds(Config.Locations[current].jobStart.x, Config.Locations[current].jobStart.y, Config.Locations[current].jobStart.z, '[~g~E~w~] - Take Order')
+          drawText3D(Config.Locations[current].jobStart.x, Config.Locations[current].jobStart.y, Config.Locations[current].jobStart.z, '[~g~E~w~] - Take Order')
           if IsControlJustReleased(0, 38) or IsDisabledControlJustReleased(0, 38) then
             TriggerEvent('don-forklift:client:startJob', current)
           end
         elseif isCurrentUserUsingWarehouse() and not jobFinished then
           sleep = 0
-          drawText3Ds(Config.Locations[current].jobStart.x, Config.Locations[current].jobStart.y, Config.Locations[current].jobStart.z, '[~r~E~w~] - Cancel Order')
+          drawText3D(Config.Locations[current].jobStart.x, Config.Locations[current].jobStart.y, Config.Locations[current].jobStart.z, '[~r~E~w~] - Cancel Order')
           if IsControlJustReleased(0, 38) or IsDisabledControlJustReleased(0, 38) then
             TriggerEvent('don-forklift:client:cancelJob', current)
+          end
+        elseif not isCurrentUserUsingWarehouse() and not jobFinished then
+          sleep = 0
+          drawText3D(Config.Locations[current].jobStart.x, Config.Locations[current].jobStart.y, Config.Locations[current].jobStart.z, '~r~Warehouse in Use~w~')
+        end
+        if isCurrentUserUsingWarehouse() then
+          drawText3D(Config.Locations[current].jobStart.x, Config.Locations[current].jobStart.y, Config.Locations[current].jobStart.z - 0.2, '[~r~F~w~] - Clock Off')
+          if (IsControlJustReleased(0, 23) or IsDisabledControlJustReleased(0, 23)) and GetVehiclePedIsEntering(ped) == 0 then
+            if not jobFinished then
+              TriggerEvent('don-forklift:client:cancelJob', current)
+            else
+              TriggerServerEvent('don-forklift:server:unreserve', current)
+            end
           end
         end
       else
@@ -632,12 +697,12 @@ CreateThread(function()
         if dist < 5.0 then
           sleep = 0
           if not vehicleOut then
-            drawText3Ds(Config.Locations[current].garage.coords.x, Config.Locations[current].garage.coords.y, Config.Locations[current].garage.coords.z, '[~g~E~w~] - Take Forklift')
+            drawText3D(Config.Locations[current].garage.coords.x, Config.Locations[current].garage.coords.y, Config.Locations[current].garage.coords.z, '[~g~E~w~] - Take Forklift')
             if IsControlJustReleased(0, 38) or IsDisabledControlJustReleased(0, 38) then
               lendVehicle(current)
             end
           elseif vehicleOut then
-            drawText3Ds(Config.Locations[current].garage.coords.x, Config.Locations[current].garage.coords.y, Config.Locations[current].garage.coords.z, '[~r~E~w~] - Return Forklift')
+            drawText3D(Config.Locations[current].garage.coords.x, Config.Locations[current].garage.coords.y, Config.Locations[current].garage.coords.z, '[~r~E~w~] - Return Forklift')
             if IsControlJustReleased(0, 38) or IsDisabledControlJustReleased(0, 38) then
               lendVehicle(current)
             end
