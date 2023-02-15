@@ -72,3 +72,25 @@ if Config.RequiresJob then
 end
 
 -------------------------------- THREADS --------------------------------
+
+local sleep = 1
+CreateThread(function()
+	while true do
+		Wait(1000 * 60 * sleep)
+		for i = 1, #Config.Locations do
+			if Config.Locations[i].inUse then
+				sleep = 0.5
+				local Player = QBCore.Functions.GetPlayerByCitizenId(Config.Locations[i].user)
+				local ped = GetPlayerPed(Player.PlayerData.source)
+				local coords = GetEntityCoords(ped)
+				local distance = #(coords - Config.Locations[i]['Start'].coords)
+				if distance > 500 then
+					sleep = 1
+					TriggerClientEvent('don-forklift:client:Unreserve', -1, i)
+					Config.Locations[i].inUse = false
+					Config.Locations[i].user = nil
+				end
+			end
+		end
+	end
+end)

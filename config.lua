@@ -85,7 +85,7 @@ Config.Locations = {
 				heading = 91.27
 			},
 			['Delivery'] = {
-				coords = vector3(159.18, -3196.7, 6.01), -- vector3(239.94, -3055.34, 5.86),
+				coords = vector3(159.18, -3196.7, 6.01),
 				heading = 90.43 -- 81.6,
 			},
 		},
@@ -128,16 +128,16 @@ Config.Locations = {
 			}
 		},
 		['Pickup'] = { -- Pickup settings ~~ I wouldn't change the vehicle as the function for finding the back is only setup for the benson ~~
-			coords = vector3(-197.98, -2598.65, 6.0), -- vector3(-197.98, -2598.65, 6.0),
-			heading = 176.56, -- 176.56,
+			coords = vector3(-197.98, -2598.65, 6.0),
+			heading = 176.56,
 			model = `benson`,
 			ped = `s_m_m_security_01`,
 			['Spawn'] = {
-				coords = vector3(-197.98, -2598.65, 6.0), -- vector3(-197.98, -2598.65, 6.0),
-				heading = 176.56 -- 176.56,
+				coords = vector3(-197.98, -2598.65, 6.0),
+				heading = 176.56
 			},
 			['Delivery'] = {
-				coords = vector3(-15.979, -2639.408, 6.007), -- vector4(37.23, -2643.52, 6.02, 90.66)
+				coords = vector3(-15.979, -2639.408, 6.007),
 				heading = 184.918,
 			}
 		},
@@ -156,11 +156,10 @@ Config.Locations = {
 	},
 	[3] = {
 		['Start'] = {
-			ped = `s_m_y_airworker`,
-			coords = vector3(1207.06, -3293.84, 4.0), -- Where the player can take orders
-			heading = 273.35,
-			scenario = 'PROP_HUMAN_SEAT_COMPUTER',
-			chair = -470815620
+			ped = `s_m_m_postal_01`,
+			coords = vector3(-424.23, -2789.92, 5.53), -- Where the player can take orders
+			heading = 312.9,
+			scenario = 'WORLD_HUMAN_CLIPBOARD'
 		},
 		['Blips'] = { -- Will use these settings for each blip if Config.UniqueNames is false, just not the label
 			sprite = 525,
@@ -171,33 +170,35 @@ Config.Locations = {
 		},
 		['Garage'] = { -- Garage settings
 			model = `forklift`,
-			ped = `s_m_m_dockwork_01`,
-			coords = vector3(1205.45, -3285.13, 4.5),
-			heading = 88.65,
-			scenario = 'WORLD_HUMAN_AA_COFFEE',
+			ped = `s_m_m_postal_02`,
+			coords = vector3(-419.25, -2763.05, 5.0),
+			heading = 177.47,
+			scenario = 'WORLD_HUMAN_STAND_MOBILE_UPRIGHT',
 			['Spawn'] = {
-				coords = vector3(1202.16, -3287.55, 5.5),
-				heading = 90.0
+				coords = vector3(-426.42, -2763.27, 6.0),
+				heading = 86.81
 			}
 		},
 		['Pickup'] = { -- Pickup settings ~~ I wouldn't change the vehicle as the function for finding the back is only setup for the benson ~~
 			model = `benson`,
 			ped = `s_m_m_security_01`,
 			['Spawn'] = {
-				coords = vector3(1113.12, -3334.41, 4.92),
-				heading = 266.6
+				coords = vector3(-197.98, -2598.65, 6.0),
+				heading = 176.56
 			},
 			['Delivery'] = {
-				coords = vector3(1229.2, -3222.6, 5.8),
-				heading = 269.37
+				coords = vector3(-521.68, -2826.88, 5.44),
+				heading = 41.14
 			}
 		},
 		['Pallets'] = { -- Pallet locations
-			[1] = vector3(1190.23, -3306.25, 5.5),
-			[2] = vector3(1199.31, -3308.33, 5.5),
-			[3] = vector3(1232.87, -3294.65, 5.5),
-			[4] = vector3(1191.27, -3274.08, 5.5),
-			[5] = vector3(1223.9, -3246.72, 5.5)
+			[1] = vector3(-473.39, -2787.66, 6.0),
+			[2] = vector3(-462.45, -2776.23, 6.0),
+			[3] = vector3(-373.18, -2780.15, 6.0),
+			[4] = vector3(-547.09, -2852.51, 6.0),
+			[5] = vector3(-503.8, -2858.56, 7.3),
+			[6] = vector3(-416.02, -2855.62, 6.0),
+			[7] = vector3(-404.9, -2844.28, 6.0)
 		},
 		inUse = false, -- DO NOT TOUCH
 		user = nil -- DO NOT TOUCH
