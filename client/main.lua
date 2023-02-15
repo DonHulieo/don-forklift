@@ -1,6 +1,6 @@
 local QBCore = exports['qb-core']:GetCoreObject()
 local PlayerData = QBCore.Functions.GetPlayerData()
-local response, cancelled, jobFinished = false, false, false
+local response, cancelled, jobFinished, vehicleOut = false, false, false, false
 
 -------------------------------- FUNCTIONS --------------------------------
 
@@ -314,9 +314,9 @@ local function spawnPickupVeh(location, pallet)
     if dist <= 2.0 then
       local isDamaged, health = isEntityDamaged(pallet)
       if isDamaged then
-        TriggerEvent('don-forklift:client:finishDelivery', isDamaged, health)
+        TriggerEvent('don-forklift:client:FinishDelivery', location, isDamaged, health)
       else
-        TriggerEvent('don-forklift:client:finishDelivery', isDamaged)
+        TriggerEvent('don-forklift:client:FinishDelivery', location, isDamaged)
       end
       DeleteEntity(pallet)
       deleteBlipForEntity(478, pallet)
@@ -357,6 +357,15 @@ local function getClosestWarehouse(ped, coords)
     end
   end
   return current, dist
+end
+
+---@return number|nil current
+local function getUsersCurrentWarehouse()
+  local identifier = PlayerData.citizenid
+  for current = 1, #Config.Locations do
+    if Config.Locations[current].inUse and Config.Locations[current].user == identifier then return current end
+  end
+  return nil
 end
 
 ---@return boolean isUser
@@ -409,22 +418,44 @@ end
 
 -------------------------------- HANDLERS --------------------------------
 
-AddEventHandler('QBCore:Client:OnPlayerLoaded', function()
-  PlayerData = QBCore.Functions.GetPlayerData()
+AddEventHandler('onResourceStop', function(resource)
+  if resource ~= GetCurrentResourceName() then return end
   for id, warehouse in pairs(Config.Locations) do
-    if Config.RequiresJob then
-      if PlayerData.job.name == Config.Job and Config.Blips then
-        createBlip(warehouse.jobStart, warehouse.blipSettings.label, warehouse.blipSettings.sprite, warehouse.blipSettings.color, warehouse.blipSettings.scale)
-      end
-    else
-      if Config.Blips then
-        createBlip(warehouse.jobStart, warehouse.blipSettings.label, warehouse.blipSettings.sprite, warehouse.blipSettings.color, warehouse.blipSettings.scale)
-      end
+    TriggerServerEvent("don-forklift:server:Unreserve", id)
+    if Config.ShowBlips then
+      deleteBlipForCoord(warehouse.blipSettings.sprite, warehouse.jobStart)
+    end
+  end
+  if response then cancelled = true end
+  if vehicleOut then lendVehicle(getUsersCurrentWarehouse()) end
+  Wait(1000)
+  response, cancelled, jobFinished, vehicleOut = false, false, false, false
+end)
+
+AddEventHandler('onResourceStart', function(resource)
+  if resource ~= GetCurrentResourceName() then return end
+  for id, warehouse in pairs(Config.Locations) do
+    TriggerServerEvent('don-forklift:server:Unreserve', id)
+    if (not Config.RequiresJob and Config.Blips) then
+      createBlip(warehouse.jobStart, warehouse.blipSettings.label, warehouse.blipSettings.sprite, warehouse.blipSettings.color, warehouse.blipSettings.scale)
     end
   end
 end)
 
-AddEventHandler('QBCore:Client:OnPlayerUnload', function()
+-------------------------------- EVENTS --------------------------------
+
+RegisterNetEvent('QBCore:Client:OnPlayerLoaded', function()
+  PlayerData = QBCore.Functions.GetPlayerData()
+  if Config.RequiresJob and PlayerData.job.name ~= Config.Job then return end
+  QBCore.Functions.TriggerCallback('don-forklift:server:GetLocations', function(locations)
+    Config.Locations = locations
+    for id, warehouse in pairs(Config.Locations) do
+      createBlip(warehouse.jobStart, warehouse.blipSettings.label, warehouse.blipSettings.sprite, warehouse.blipSettings.color, warehouse.blipSettings.scale)
+    end
+  end)
+end)
+
+RegisterNetEvent('QBCore:Client:OnPlayerUnload', function()
   PlayerData = {}
   if Config.Blips then
     for id, warehouse in pairs(Config.Locations) do
@@ -433,7 +464,7 @@ AddEventHandler('QBCore:Client:OnPlayerUnload', function()
   end
 end)
 
-AddEventHandler('QBCore:Client:OnJobUpdate', function(JobInfo)
+RegisterNetEvent('QBCore:Client:OnJobUpdate', function(JobInfo)
   for id, warehouse in pairs(Config.Locations) do
     if Config.RequiresJob then
       if JobInfo.name == Config.Job then
@@ -452,32 +483,7 @@ AddEventHandler('QBCore:Client:OnJobUpdate', function(JobInfo)
   end
 end)
 
-AddEventHandler('onResourceStop', function(resource)
-  if resource == GetCurrentResourceName() then
-    for id, warehouse in pairs(Config.Locations) do
-      TriggerServerEvent("don-forklift:server:unreserve", id)
-      if Config.ShowBlips then
-        deleteBlipForCoord(warehouse.blipSettings.sprite, warehouse.jobStart)
-      end
-    end
-  end
-end)
-
-AddEventHandler('onResourceStart', function(resource)
-  if resource == GetCurrentResourceName() then
-    getSafeDelivCoords()
-    for id, warehouse in pairs(Config.Locations) do
-      TriggerServerEvent('don-forklift:server:unreserve', id)
-      if (not Config.RequiresJob and Config.Blips) then
-        createBlip(warehouse.jobStart, warehouse.blipSettings.label, warehouse.blipSettings.sprite, warehouse.blipSettings.color, warehouse.blipSettings.scale)
-      end
-    end
-  end
-end)
-
--------------------------------- EVENTS --------------------------------
-
-RegisterNetEvent('don-forklift:client:startJob', function(location)
+RegisterNetEvent('don-forklift:client:StartJob', function(location)
   local ped = PlayerPedId()
   local identifier = PlayerData.citizenid
   local inUse = Config.Locations[location].inUse
@@ -490,7 +496,7 @@ RegisterNetEvent('don-forklift:client:startJob', function(location)
         return 
       end
     end
-    TriggerServerEvent('don-forklift:server:reserve', location)
+    TriggerServerEvent('don-forklift:server:Reserve', location)
     local pallet = spawnPallet(location)
     jobFinished = false
     cancelled = false
@@ -506,7 +512,7 @@ RegisterNetEvent('don-forklift:client:startJob', function(location)
   end
 end)
 
-RegisterNetEvent('don-forklift:client:finishDelivery', function(isDamaged, health)
+RegisterNetEvent('don-forklift:client:FinishDelivery', function(current, isDamaged, health)
   jobFinished = true
   response = false 
   QBCore.Functions.Notify('Package loaded..', 'success', 1500)
@@ -514,36 +520,36 @@ RegisterNetEvent('don-forklift:client:finishDelivery', function(isDamaged, healt
     Wait(2500)
     if health < 1000 and health > 750 then
       QBCore.Functions.Notify('The product is almost pristine', 'success', 2000)
-      TriggerServerEvent('don-forklift:server:payPlayer', Config.PayScales.bonus3)
+      TriggerServerEvent('don-forklift:server:PayPlayer', current, Config.PayScales.bonus3)
     elseif health < 750 and health > 500 then
       QBCore.Functions.Notify('The product is damaged, but still usable..', 'error', 2000)
-      TriggerServerEvent('don-forklift:server:payPlayer', Config.PayScales.bonus2)
+      TriggerServerEvent('don-forklift:server:PayPlayer', current, Config.PayScales.bonus2)
     elseif health < 500 and health > 250 then
       QBCore.Functions.Notify('The products pretty banged up..', 'error', 2000)
-      TriggerServerEvent('don-forklift:server:payPlayer', Config.PayScales.bonus)
+      TriggerServerEvent('don-forklift:server:PayPlayer', current, Config.PayScales.bonus)
     elseif health < 250 then
       QBCore.Functions.Notify('The product is badly damaged, you will not be paid for this delivery..', 'error', 3500)
     end
   else
     QBCore.Functions.Notify('The product is pristine', 'success')
-    TriggerServerEvent('don-forklift:server:payPlayer', Config.PayScales.bonus3 + Config.PayScales.bonus2 + Config.PayScales.bonus)
+    TriggerServerEvent('don-forklift:server:PayPlayer', current, Config.PayScales.bonus3 + Config.PayScales.bonus2 + Config.PayScales.bonus)
   end
 end)
 
-RegisterNetEvent('don-forklift:client:cancelJob', function(location)
+RegisterNetEvent('don-forklift:client:CancelJob', function(location)
   if location then
     if isCurrentUserUsingWarehouse() then
       response = false
       cancelled = true
       QBCore.Functions.Notify('You have cancelled the order', 'error')
-      TriggerServerEvent('don-forklift:server:unreserve', location)
+      TriggerServerEvent('don-forklift:server:Unreserve', location)
     else
       QBCore.Functions.Notify('You are not doing this order', 'error')
     end
   end
 end)
 
-RegisterNetEvent('don-forklift:client:reserve', function(k, identifier)
+RegisterNetEvent('don-forklift:client:Reserve', function(k, identifier)
   if k then
     if Config.Locations[k] then
       if not Config.Locations[k].user and not Config.Locations[k].inUse then
@@ -554,7 +560,7 @@ RegisterNetEvent('don-forklift:client:reserve', function(k, identifier)
   end
 end)
 
-RegisterNetEvent('don-forklift:client:unreserve', function(k)
+RegisterNetEvent('don-forklift:client:Unreserve', function(k)
   if k then
     Config.Locations[k].inUse = false
     Config.Locations[k].user = nil
@@ -610,11 +616,10 @@ if Config.UseTarget then
       }, {
         options = {
           {
-          type = 'client',
           icon = 'fas fa-truck-fast',
           label = 'Take Order',
           action = function ()
-              TriggerEvent('don-forklift:client:startJob', k)   
+              TriggerEvent('don-forklift:client:StartJob', k)   
             end,
           canInteract = function() -- Checks if the warehouse is in use
             if v.inUse and not jobFinished then return false end
@@ -622,11 +627,10 @@ if Config.UseTarget then
             end
           },
           {
-          type = "client",
           icon = 'fas fa-sign-out-alt',
           label = 'Cancel Order',
           action = function ()
-              TriggerEvent('don-forklift:client:cancelJob', k)   
+              TriggerEvent('don-forklift:client:CancelJob', k)   
             end,
           canInteract = function() -- Checks if the warehouse is in use
             if not isCurrentUserUsingWarehouse() or jobFinished then return false end
@@ -655,13 +659,13 @@ CreateThread(function()
           sleep = 0
           drawText3D(Config.Locations[current].jobStart.x, Config.Locations[current].jobStart.y, Config.Locations[current].jobStart.z, '[~g~E~w~] - Take Order')
           if IsControlJustReleased(0, 38) or IsDisabledControlJustReleased(0, 38) then
-            TriggerEvent('don-forklift:client:startJob', current)
+            TriggerEvent('don-forklift:client:StartJob', current)
           end
         elseif isCurrentUserUsingWarehouse() and not jobFinished then
           sleep = 0
           drawText3D(Config.Locations[current].jobStart.x, Config.Locations[current].jobStart.y, Config.Locations[current].jobStart.z, '[~r~E~w~] - Cancel Order')
           if IsControlJustReleased(0, 38) or IsDisabledControlJustReleased(0, 38) then
-            TriggerEvent('don-forklift:client:cancelJob', current)
+            TriggerEvent('don-forklift:client:CancelJob', current)
           end
         elseif not isCurrentUserUsingWarehouse() and not jobFinished then
           sleep = 0
@@ -671,9 +675,9 @@ CreateThread(function()
           drawText3D(Config.Locations[current].jobStart.x, Config.Locations[current].jobStart.y, Config.Locations[current].jobStart.z - 0.2, '[~r~F~w~] - Clock Off')
           if (IsControlJustReleased(0, 23) or IsDisabledControlJustReleased(0, 23)) and GetVehiclePedIsEntering(ped) == 0 then
             if not jobFinished then
-              TriggerEvent('don-forklift:client:cancelJob', current)
+              TriggerEvent('don-forklift:client:CancelJob', current)
             else
-              TriggerServerEvent('don-forklift:server:unreserve', current)
+              TriggerServerEvent('don-forklift:server:Unreserve', current)
             end
           end
         end
