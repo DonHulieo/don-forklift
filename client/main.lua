@@ -456,7 +456,7 @@ local function listen4Load(ped, veh)
           sleep = 30000
         end
       end
-      print(coords, deliv, dist)
+      -- print(coords, deliv, dist)
       if lastCoords == coords or #(coords - lastCoords) < 5.0 then
         count = count + 1
         if count > 10 then
