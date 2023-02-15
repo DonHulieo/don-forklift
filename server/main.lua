@@ -2,6 +2,11 @@ local QBCore = exports['qb-core']:GetCoreObject()
 
 -------------------------------- EVENTS --------------------------------
 
+RegisterNetEvent('QBCore:Server:UpdateObject', function()
+	if source ~= '' then return false end
+	QBCore = exports['qb-core']:GetCoreObject()
+end)
+
 ---@param k number
 RegisterServerEvent('don-forklift:server:Reserve', function(k)
 	local src = source
@@ -59,3 +64,11 @@ QBCore.Functions.CreateCallback('don-forklift:server:GetLocations', function(sou
 	if Config.RequiresJob and Player.PlayerData.job.name ~= Config.Job then return end
 	cb(Config.Locations)
 end)
+
+-------------------------------- JOB --------------------------------
+
+if Config.RequiresJob then
+	QBCore.Functions.AddJobs(Config.Job['logistics'])
+end
+
+-------------------------------- THREADS --------------------------------

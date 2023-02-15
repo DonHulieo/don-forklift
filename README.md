@@ -12,63 +12,20 @@ Warehousing script for QBCore
 
 ## Features
 
-- Optimised Code, running at 0.0ms at rest and peaking at 0.2ms whilst using QBTarget, 0.6ms whilst using DrawText
+- Optimised Code, running at 0.0ms at rest and peaking at 0.2ms whilst using QBTarget, 0.5ms whilst using DrawText
 - Can be used for a specific job (set in the config) or for anyone as an activity
-- Can be configured for multiple warehouses (set in the config) ~ Currently only 1 is configured
+- Can be configured for multiple warehouses (set in the config) ~ Supports 3 warehouses by default and Ultrunz's Warehouse
 - Earn Bonus Money for completing the job without damaging the pallets
 - A percantage of money earned through deliveries is sent to the business society
 
-## Job (qb-core/shared/jobs.lua)
+## Installation
 
-- Make sure to add below, or a similar version of, if using Config.RequiresJob.
+- Download the latest release from [here]()
+- Extract the don-forklift folder to your resources folder
+- Add `ensure don-forklift` to your server.cfg
+- Edit the config.lua to your liking
 
-```lua
-["logistics"] = { 
-  label = "East Coast Inc.",
-  defaultDuty = false,
-  offDutyPay = false,
-  bossmenu = vector3(152.45, -3105.86, 5.9),
-  grades = {
-    ['0'] = {
-      name = "Trainee",
-      payment = 1700
-    },
-    ['1'] = {
-      name = "Storeman",
-      payment = 1900
-    },
-    ['2'] = {
-      name = "Labourer",
-      payment = 1950
-    },
-    ['3'] = {
-      name = "Team Leader",
-      payment = 2000
-    },
-    ['4'] = {
-      name = "Manager",
-      payment = 2050
-    },
-    ['5'] = {
-      name = "Delivery Driver",
-      payment = 2100
-    },
-    ['6'] = {
-      name = "Truck Driver",
-      payment = 2100
-    },
-    ['7'] = {
-      name = "Foreman",
-      payment = 2450
-    },
-    ['8'] = {
-      name = "Owner",
-      isboss = true,
-      payment = 2800
-    },
-  },   
-},
-```
+- **Note:** If RequiresJob is set to true, the job can be set in the config, if set to false, the job is not required.
 
 ## Job Locations
 
