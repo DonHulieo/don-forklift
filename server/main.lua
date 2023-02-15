@@ -2,6 +2,7 @@ local QBCore = exports['qb-core']:GetCoreObject()
 
 -------------------------------- EVENTS --------------------------------
 
+---@param k number
 RegisterServerEvent('don-forklift:server:Reserve', function(k)
 	local src = source
 	local Player = QBCore.Functions.GetPlayer(src)
@@ -13,6 +14,7 @@ RegisterServerEvent('don-forklift:server:Reserve', function(k)
 	Config.Locations[k].user = identifier
 end)
 
+---@param k number
 RegisterServerEvent('don-forklift:server:Unreserve', function(k)
 	local src = source
 	local Player = QBCore.Functions.GetPlayer(src)
@@ -24,6 +26,8 @@ RegisterServerEvent('don-forklift:server:Unreserve', function(k)
 	Config.Locations[k].user = nil
 end)
 
+---@param current number
+---@param bonus number
 RegisterServerEvent('don-forklift:server:PayPlayer', function(current, bonus)
 	local src = source
 	local Player = QBCore.Functions.GetPlayer(src)
@@ -46,6 +50,8 @@ end)
 
 -------------------------------- CALLBACKS --------------------------------
 
+---@param cb function
+---@return table
 QBCore.Functions.CreateCallback('don-forklift:server:GetLocations', function(source, cb)
 	local src = source
 	local Player = QBCore.Functions.GetPlayer(src)

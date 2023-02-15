@@ -1,6 +1,6 @@
 Config = {}
 
-Config.UseTarget = true -- Set to false if you want to use 3DText instead of QBTarget
+Config.UseTarget = false -- Set to false if you want to use 3DText instead of QBTarget
 
 Config.Blips = true -- Enable blips on the map
 Config.BlipName = "Warehouse Logistics"
@@ -25,24 +25,26 @@ Config.PayScales = {
 
 Config.Locations = {
 	[1] = {
-		jobStart = vector3(1206.38, -3258.93, 5.5), -- Where the player can take orders
-		boxzone = { -- Boxzone settings to allow for the most configurabilty 
-			length = 1.0,
-			width = 2.5,
-			heading = 0.0
+		['Start'] = {
+			ped = `s_m_y_airworker`,
+			coords = vector3(1206.38, -3258.93, 4.5), -- Where the player can take orders
+			heading = 90.0,
+			scenario = 'WORLD_HUMAN_CLIPBOARD'
 		},
-		blipSettings = { -- Will use these settings for each blip if Config.UniqueNames is false, just not the label
+		['Blips'] = { -- Will use these settings for each blip if Config.UniqueNames is false, just not the label
 			sprite = 525,
 			color = 28,
 			scale = 0.6,
 			display = 4,
 			label = 'PostOp Warehouse'
 		},
-		garage = { -- Garage settings
+		['Garage'] = { -- Garage settings
 			model = `forklift`,
+			ped = `s_m_m_dockwork_01`,
 			coords = vector3(1201.55, -3287.51, 5.5),
 			heading = 90.0,
-			zone = {
+			scenario = 'WORLD_HUMAN_AA_COFFEE',
+			['Spawn'] = {
 				coords = vector3(1202.16, -3287.55, 5.5),
 				length = 3.0,
 				width = 2.0,
@@ -50,17 +52,19 @@ Config.Locations = {
   
 			}
 		},
-		pickup = { -- Pickup settings ~~ I wouldn't change the vehicle as the function for finding the back is only setup for the benson ~~
-			coords = vector3(1113.12, -3334.41, 5.92),
-			heading = 266.6,
+		['Pickup'] = { -- Pickup settings ~~ I wouldn't change the vehicle as the function for finding the back is only setup for the benson ~~
 			model = `benson`,
-			ped = `s_m_m_security_01`
+			ped = `s_m_m_security_01`,
+			['Spawn'] = {
+				coords = vector3(1113.12, -3334.41, 4.92),
+				heading = 266.6
+			},
+			['Delivery'] = {
+				coords = vector3(1229.2, -3222.6, 5.8),
+				heading = 269.37
+			}
 		},
-		delivery = {  -- Where the Pickup vehicle will pickup the pallet
-			coords = vector3(1229.2, -3222.6, 5.8),
-			heading = 269.37
-		},
-		pallets = { -- Pallet locations
+		['Pallets'] = { -- Pallet locations
 			[1] = vector3(1190.23, -3306.25, 5.5),
 			[2] = vector3(1199.31, -3308.33, 5.5),
 			[3] = vector3(1232.87, -3294.65, 5.5),
@@ -71,42 +75,44 @@ Config.Locations = {
 		user = nil -- DO NOT TOUCH
 	},
 	[2] = {
-		jobStart = vector3(153.91, -3211.73, 5.91), -- Where the player can take orders
-		boxzone = { -- Boxzone settings to allow for the most configurabilty 
-			length = 1.0,
-			width = 2.5,
-			heading = 272.83
+		['Start'] = {
+			ped = `s_m_y_airworker`,
+			coords = vector3(153.81, -3214.6, 4.93), -- Where the player can take orders vector4(153.81, -3214.6, 5.93, 87.71)
+			heading = 87.71,
+			scenario = 'WORLD_HUMAN_CLIPBOARD'
 		},
-		blipSettings = { -- Will use these settings for each blip if Config.UniqueNames is false, just not the label
+		['Blips'] = { -- Will use these settings for each blip if Config.UniqueNames is false, just not the label
 			sprite = 525,
 			color = 28,
 			scale = 0.6,
 			display = 4,
 			label = 'Walker Logistics'
 		},
-		garage = { -- Garage settings
+		['Garage'] = { -- Garage settings
 			model = `forklift`,
-			coords = vector3(128.15, -3183.94, 5.87),
-			heading = 269.27,
-			zone = {
+			ped = `s_m_y_dockwork_01`,
+			coords = vector3(120.89, -3184.05, 4.99), 
+			heading = 265.37,
+			scenario = 'WORLD_HUMAN_AA_COFFEE',
+			['Spawn'] = {
 				coords = vector3(128.15, -3183.94, 5.87),
-				length = 3.0,
-				width = 2.0,
 				heading = 269.27
 
 			}
 		},
-		pickup = { -- Pickup settings ~~ I wouldn't change the vehicle as the function for finding the back is only setup for the benson ~~
-			coords = vector3(305.12, -2831.82, 6.0),
-			heading = 91.27,
+		['Pickup'] = { -- Pickup settings ~~ I wouldn't change the vehicle as the function for finding the back is only setup for the benson ~~
 			model = `benson`,
-			ped = `s_m_m_security_01`
+			ped = `s_m_m_security_01`,
+			['Spawn'] = {
+				coords = vector3(305.12, -2831.82, 6.0),
+				heading = 91.27
+			},
+			['Delivery'] = {
+				coords = vector3(159.18, -3196.7, 6.01), -- vector3(239.94, -3055.34, 5.86),
+				heading = 90.43 -- 81.6,
+			},
 		},
-		delivery = {  -- Where the Pickup vehicle will pickup the pallet
-			coords = vector3(159.18, -3196.7, 6.01), -- vector3(239.94, -3055.34, 5.86),
-			heading = 90.43, -- 81.6,
-		},
-		pallets = { -- Pallet locations
+		['Pallets'] = { -- Pallet locations
 			[1] = vector3(147.43, -3210.50, 5.86),
 			[2] = vector3(143.17, -3210.38, 5.86),
 			[3] = vector3(134.61, -3210.25, 5.86),
@@ -124,24 +130,26 @@ Config.Locations = {
 		user = nil -- DO NOT TOUCH
 	},
 	[3] = {
-		jobStart = vector3(-69.09, -2654.16, 6.00), -- Where the player can take orders
-		boxzone = { -- Boxzone settings to allow for the most configurabilty 
-			length = 2.0,
-			width = 3.5,
-			heading = 0.0
+		['Start'] = {
+			ped = `s_m_y_airworker`,
+			coords = vector3(-69.09, -2654.16, 6.00), -- Where the player can take orders
+			heading = 90.0,
+			scenario = 'WORLD_HUMAN_CLIPBOARD'
 		},
-		blipSettings = { -- Will use these settings for each blip if Config.UniqueNames is false, just not the label
+		['Blips'] = { -- Will use these settings for each blip if Config.UniqueNames is false, just not the label
 			sprite = 525,
 			color = 28,
 			scale = 0.6,
 			display = 4,
 			label = 'ALRP Warehouse'
 		},
-		garage = { -- Garage settings
+		['Garage'] = { -- Garage settings
 			model = `forklift`,
-			coords = vector3(-61.47, -2653.63, 6.00),
+			ped = `s_m_y_dockwork_01`,
+			coords = vector3(-61.47, -2653.63, 5.00),
 			heading = 8.0,
-			zone = {
+			scenario = 'WORLD_HUMAN_AA_COFFEE',
+			['Spawn'] = {
 				coords = vector3(-61.47, -2653.63, 6.00),
 				length = 3.0,
 				width = 2.0,
@@ -149,17 +157,21 @@ Config.Locations = {
 
 			}
 		},
-		pickup = { -- Pickup settings ~~ I wouldn't change the vehicle as the function for finding the back is only setup for the benson ~~
+		['Pickup'] = { -- Pickup settings ~~ I wouldn't change the vehicle as the function for finding the back is only setup for the benson ~~
 			coords = vector3(-197.98, -2598.65, 6.0), -- vector3(-197.98, -2598.65, 6.0),
 			heading = 176.56, -- 176.56,
 			model = `benson`,
-			ped = `s_m_m_security_01`
+			ped = `s_m_m_security_01`,
+			['Spawn'] = {
+				coords = vector3(-197.98, -2598.65, 6.0), -- vector3(-197.98, -2598.65, 6.0),
+				heading = 176.56 -- 176.56,
+			},
+			['Delivery'] = {
+				coords = vector3(-16.77, -2638.06, 5.48), -- vector3(-13.96, -2659.44, 6.00),
+				heading = 182.33 -- 182.33,
+			}
 		},
-		delivery = {  -- Where the Pickup vehicle will pickup the pallet
-			coords = vector3(-16.77, -2638.06, 5.48), -- vector3(-13.96, -2659.44, 6.00),
-			heading = 182.33, 
-		},
-		pallets = { -- Pallet locations
+		['Pallets'] = { -- Pallet locations
 			[1] = vector3(-111.65, -2692.01, 6.01),
 			[2] = vector3(-115.09, -2707.64, 6.02),
 			[3] = vector3(-128.16, -2705.70, 6.01),

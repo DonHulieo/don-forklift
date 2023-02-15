@@ -2,13 +2,69 @@ local QBCore = exports['qb-core']:GetCoreObject()
 local PlayerData = QBCore.Functions.GetPlayerData()
 local response, cancelled, jobFinished, vehicleOut = false, false, false, false
 
+---@alias vector3 table
+---| 'x' number X Coordinate
+---| 'y' number Y Coordinate
+---| 'z' number Z Coordinate
+
 -------------------------------- FUNCTIONS --------------------------------
 
----@param dict string
-local function reqAnimDict(dict)
-  if HasAnimDictLoaded(dict) or not dict then return end
-  RequestAnimDict(dict)
-  repeat Wait(0) until HasAnimDictLoaded(dict)
+---@param coords vector3
+---@param text string
+---@param sprite number
+---@param color number
+---@param scale number
+---@return number|nil blip Blip Handle or nil if coords are nil
+local function createBlip(coords, text, sprite, color, scale)
+  if not coords then return end
+  if Config.UniqueNames then
+    text = text
+  else
+    text = Config.BlipName
+  end
+  local blip = AddBlipForCoord(coords)
+  SetBlipSprite(blip, sprite)
+  SetBlipCategory(blip, 1)
+  SetBlipDisplay(blip, 4)
+  SetBlipScale(blip, scale)
+  SetBlipColour(blip, color)
+  SetBlipAsShortRange(blip, true)
+  AddTextEntry(text, text)
+  BeginTextCommandSetBlipName(text)
+  EndTextCommandSetBlipName(blip)
+  return blip
+end
+
+---@param entity number Entity Handle
+---@return number blip Blip Handle
+local function createPickupBlip(entity)
+  local blip = AddBlipForEntity(entity)
+  SetBlipSprite(blip, 67)
+  SetBlipCategory(blip, 2)
+  SetBlipDisplay(blip, 4)
+  SetBlipScale(blip, 0.8)
+  SetBlipColour(blip, 2)
+  SetBlipAsShortRange(blip, true)
+  AddTextEntry('Drop Off', 'Drop Off')
+  BeginTextCommandSetBlipName('Drop Off')
+  EndTextCommandSetBlipName(blip)
+  return blip
+end
+
+---@param entity number Entity Handle
+---@return number blip Blip Handle
+local function createPalletBlip(entity)
+  local blip = AddBlipForEntity(entity)
+  SetBlipSprite(blip, 478)
+  SetBlipCategory(blip, 2)
+  SetBlipDisplay(blip, 4)
+  SetBlipScale(blip, 0.8)
+  SetBlipColour(blip, 70)
+  SetBlipAsShortRange(blip, true)
+  AddTextEntry('Pallet', 'Pallet')
+  BeginTextCommandSetBlipName('Pallet')
+  EndTextCommandSetBlipName(blip)
+  return blip
 end
 
 ---@param model string|number
@@ -19,10 +75,10 @@ local function reqMod(model)
   repeat Wait(0) until HasModelLoaded(model)
 end
 
----@param x number @x coord
----@param y number @y coord
----@param z number @z coord
----@param text string @text to draw
+---@param x number
+---@param y number
+---@param z number
+---@param text string 
 local function drawText3D(x, y, z, text)
   if type(x) == 'vector3' then
     text = y
@@ -53,7 +109,7 @@ local function drawText3D(x, y, z, text)
 end
 
 local marker = false
----@param entity Entity @entity to create marker for
+---@param entity number Entity Handle to create marker for
 local function createMarker(entity)
   if not DoesEntityExist(entity) then return end
   marker = true
@@ -72,34 +128,175 @@ local function createMarker(entity)
   end)
 end
 
+---@param ped number
 ---@param coords vector3
----@param text string
----@param sprite number
----@param color number
----@param scale number
----@return number|nil blip 
-local function createBlip(coords, text, sprite, color, scale)
-  if not coords then return end
-  if Config.UniqueNames then
-    text = text
-  else
-    text = Config.BlipName
+---@return number, number current, dist
+local function getClosestWarehouse(ped, coords)
+  local ped = PlayerPedId() or ped
+  local coords = GetEntityCoords(ped) or coords
+  local current = nil
+  local dist = nil
+  for id, warehouse in pairs(Config.Locations) do
+    if current then
+      if #(coords - warehouse['Start'].coords) < dist then
+        current = id
+        dist = #(coords - warehouse['Start'].coords)
+      end
+    else
+      dist = #(coords - warehouse['Start'].coords)
+      current = id
+    end
   end
-  local blip = AddBlipForCoord(coords)
-  SetBlipSprite(blip, sprite)
-  SetBlipCategory(blip, 1)
-  SetBlipDisplay(blip, 4)
-  SetBlipScale(blip, scale)
-  SetBlipColour(blip, color)
-  SetBlipAsShortRange(blip, true)
-  AddTextEntry(text, text)
-  BeginTextCommandSetBlipName(text)
-  EndTextCommandSetBlipName(blip)
-  return blip
+  return current, dist
+end
+
+---@return boolean isUser
+local function isCurrentUserUsingWarehouse()
+  local identifier = PlayerData.citizenid
+  local current, dist = getClosestWarehouse()
+  if Config.Locations[current].inUse and Config.Locations[current].user == identifier then return true end
+  return false
+end
+
+---@return number|nil current
+local function getUsersCurrentWarehouse()
+  local identifier = PlayerData.citizenid
+  for current = 1, #Config.Locations do
+    if Config.Locations[current].inUse and Config.Locations[current].user == identifier then return current end
+  end
+  return nil
+end
+
+---@param location number
+local function lendVehicle(location)
+  local ped = PlayerPedId()
+  local coords = Config.Locations[location]['Garage']['Spawn'].coords
+  local heading = Config.Locations[location]['Garage']['Spawn'].heading
+  local model = Config.Locations[location]['Garage'].model
+  local isUser = isCurrentUserUsingWarehouse()
+  if isUser then
+    if Config.RequiresJob then 
+      if not PlayerData.job then 
+        QBCore.Functions.Notify("You are not a "..Config.Job.."...", "error") 
+        return 
+      end
+    end
+    local lastVeh = GetPlayersLastVehicle()
+    local lastMod = GetEntityModel(lastVeh)
+    if not IsPedInAnyVehicle(ped, false) and lastMod ~= Config.Locations[location]['Garage'].model then
+      QBCore.Functions.SpawnVehicle(model, function(vehicle)
+        SetVehicleNumberPlateText(vehicle, "FORK"..tostring(math.random(1000, 9999)))
+        SetEntityHeading(vehicle, heading)
+        exports['don-fuel']:SetFuel(vehicle, 100.0)
+        TaskEnterVehicle(ped, vehicle, -1, -1, 1.0, 1, 0)
+        SetEntityAsMissionEntity(vehicle, true, true)
+        TriggerEvent("vehiclekeys:client:SetOwner", GetVehicleNumberPlateText(vehicle))
+        SetVehicleEngineOn(vehicle, true, true)
+        QBCore.Functions.Notify("Forklift retrieved from garage...", "success")
+        vehicleOut = true
+      end, coords, true)
+    else
+      local plate = GetVehicleNumberPlateText(lastVeh)
+      if plate:sub(1, 4) == "FORK" then
+        QBCore.Functions.DeleteVehicle(lastVeh)
+        QBCore.Functions.Notify("Forklift returned to garage...", "success")
+        vehicleOut = false
+      else
+        QBCore.Functions.Notify("You are not in a forklift...", "error")
+      end
+    end
+  end
+end
+
+---@param index number
+---@param warehouse table
+local function createWarehousePeds(index, warehouse)
+  local start = warehouse['Start']
+  local model = start.ped
+  reqMod(model)
+  local ped = CreatePed(4, model, start.coords, start.heading, false, false)
+  local garage = warehouse['Garage']
+  local model1 = garage.ped
+  reqMod(model)
+  local ped1 = CreatePed(4, model, garage.coords, garage.heading, false, false)
+  SetBlockingOfNonTemporaryEvents(ped, true)
+  SetBlockingOfNonTemporaryEvents(ped1, true)
+  SetPedDiesWhenInjured(ped, false)
+  SetPedDiesWhenInjured(ped1, false)
+  SetPedCanPlayAmbientAnims(ped, true)
+  SetPedCanPlayAmbientAnims(ped1, true)
+  SetPedCanRagdollFromPlayerImpact(ped, false)
+  SetPedCanRagdollFromPlayerImpact(ped1, false)
+  SetEntityInvincible(ped, true)
+  SetEntityInvincible(ped1, true)
+  SetPedFleeAttributes(ped, 0, 0)
+  SetPedFleeAttributes(ped1, 0, 0)
+  FreezeEntityPosition(ped, true)
+  FreezeEntityPosition(ped1, true)
+  TaskStartScenarioInPlace(ped, start.scenario, 0, true)
+  TaskStartScenarioInPlace(ped1, garage.scenario, 0, true)
+  if Config.UseTarget then 
+    exports['qb-target']:AddTargetEntity(ped, {
+      options = {
+        {
+          icon = 'fas fa-truck-fast',
+          label = 'Take Order',
+          action = function ()
+            TriggerEvent('don-forklift:client:StartJob', index)   
+          end,
+          canInteract = function() -- Checks if the warehouse is in use
+          if warehouse.inUse and not jobFinished then return false end
+            return true
+          end
+        },
+        {
+          icon = 'fas fa-sign-out-alt',
+          label = 'Cancel Order',
+          action = function ()
+            TriggerEvent('don-forklift:client:CancelJob', index)   
+          end,
+          canInteract = function() -- Checks if the warehouse is in use
+          if not isCurrentUserUsingWarehouse() or jobFinished then return false end
+            return true
+          end
+        }
+      },
+      distance = 2.0 -- This is the distance for you to be at for the target to turn blue, this is in GTA units and has to be a float value
+    })
+    exports['qb-target']:AddTargetEntity(ped1, {
+      options = {
+        {
+          type = 'client',
+          icon = 'fas fa-warehouse',
+          label = 'Take Forklift',
+          action = function()
+            lendVehicle(index)
+          end,
+          canInteract = function() -- Checks if the warehouse is in use
+          if vehicleOut or not warehouse.inUse then return false end
+            return true
+          end
+        },
+        {
+          type = "client",
+          icon = 'fas fa-warehouse',
+          label = 'Return Forklift',
+          action = function()
+            lendVehicle(index)
+          end,
+          canInteract = function() -- Checks if the warehouse is in use
+          if not vehicleOut or not warehouse.inUse then return false end
+            return true
+          end
+        }
+      },
+      distance = 2.0 -- This is the distance for you to be at for the target to turn blue, this is in GTA units and has to be a float value
+    })
+  end
 end
 
 ---@param sprite number
----@param coords vector3
+---@param coords vector3 
 local function deleteBlipForCoord(sprite, coords)
   local blip = GetFirstBlipInfoId(sprite)
   local blipCoords = GetBlipInfoIdCoord(blip)
@@ -108,8 +305,8 @@ local function deleteBlipForCoord(sprite, coords)
   end
 end
 
----@param sprite number
----@param entity number
+---@param sprite number Blip Sprite
+---@param entity number Entity Handle
 local function deleteBlipForEntity(sprite, entity)
   local blip = GetFirstBlipInfoId(sprite)
   local blipEntity = GetBlipInfoIdEntityIndex(blip)
@@ -118,46 +315,25 @@ local function deleteBlipForEntity(sprite, entity)
   end
 end
 
----@param entity number
----@return number blip
-local function createPalletBlip(entity)
-  local blip = AddBlipForEntity(entity)
-  SetBlipSprite(blip, 478)
-  SetBlipCategory(blip, 2)
-  SetBlipDisplay(blip, 4)
-  SetBlipScale(blip, 0.8)
-  SetBlipColour(blip, 70)
-  SetBlipAsShortRange(blip, true)
-  AddTextEntry('Pallet', 'Pallet')
-  BeginTextCommandSetBlipName('Pallet')
-  EndTextCommandSetBlipName(blip)
-  return blip
-end
-
----@param entity number
----@return number blip
-local function createPickupBlip(entity)
-  local blip = AddBlipForEntity(entity)
-  SetBlipSprite(blip, 67)
-  SetBlipCategory(blip, 2)
-  SetBlipDisplay(blip, 4)
-  SetBlipScale(blip, 0.8)
-  SetBlipColour(blip, 2)
-  SetBlipAsShortRange(blip, true)
-  AddTextEntry('Drop Off', 'Drop Off')
-  BeginTextCommandSetBlipName('Drop Off')
-  EndTextCommandSetBlipName(blip)
-  return blip
+local function removePeds()
+  for i = 1, #Config.Locations do
+    local start = Config.Locations[i]['Start'].coords
+    local garage = Config.Locations[i]['Garage'].coords
+    local startPed = GetClosestObjectOfType(start, 1.0, Config.Locations[i]['Start'].ped, false, false, false)
+    local garagePed = GetClosestObjectOfType(garage, 1.0, Config.Locations[i]['Garage'].ped, false, false, false)
+    if DoesEntityExist(startPed) then DeleteEntity(startPed) end
+    if DoesEntityExist(garagePed) then DeleteEntity(garagePed) end
+  end
 end
 
 ---@param location number
----@return number
+---@return number pallet Object Handle
 local function spawnPallet(location)
-  local rand = math.random(1, #Config.Locations[location].pallets)
-  local coords = Config.Locations[location].pallets[rand]
+  local rand = math.random(1, #Config.Locations[location]['Pallets'])
+  local coords = Config.Locations[location]['Pallets'][rand]
   local model = Config.PalletModel
   reqMod(model)
-  pallet = CreateObject(model, coords.x, coords.y, coords.z-0.95, true, true, true)
+  pallet = CreateObject(model, coords.x, coords.y, coords.z - 0.95, true, true, true)
   SetEntityAsMissionEntity(pallet)
   SetEntityCanBeDamaged(pallet, true)
   SetEntityDynamic(pallet, true)
@@ -167,7 +343,7 @@ local function spawnPallet(location)
   return pallet
 end
 
----@param entity number
+---@param entity number Entity Handle
 ---@return boolean, number isDamaged, health
 local function isEntityDamaged(entity)
   local health = GetEntityHealth(entity)
@@ -178,7 +354,7 @@ local function isEntityDamaged(entity)
   end
 end
 
----@return table
+---@return table coords Table of all player coords known to this client
 local function getPlayerCoords()
   local players = GetActivePlayers()
   local coords = {}
@@ -191,7 +367,7 @@ local function getPlayerCoords()
 end
 
 ---@param coords vector3
----@return boolean
+---@return boolean isSafe
 local function isSafe(coords)
   local players = getPlayerCoords()
   for i = 1, #players do
@@ -203,7 +379,7 @@ local function isSafe(coords)
   return true
 end
 
----@return vector3
+---@return vector3 newCoords
 local function getSafeDelivCoords()
   local coords = GetEntityCoords(PlayerPedId())
   newCoords = coords + vector3(math.random(1, 100), math.random(1, 100), math.random(1, 20))
@@ -217,8 +393,8 @@ local function getSafeDelivCoords()
 end
 
 local loaded = false
----@param ped number
----@param veh number
+---@param ped number Ped Handle
+---@param veh number Vehicle Handle
 local function listen4Load(ped, veh)
   local deliv = getSafeDelivCoords()
   local sleep = 5000
@@ -244,7 +420,7 @@ local function listen4Load(ped, veh)
           sleep = 30000
         end
       end
-      print(coords, deliv, dist)
+      -- print(coords, deliv, dist)
       if lastCoords == coords or #(coords - lastCoords) < 5.0 then
         count = count + 1
         if count > 10 then
@@ -259,18 +435,128 @@ local function listen4Load(ped, veh)
   end)
 end
 
+-------------------------------- HANDLERS --------------------------------
+
+---@param resource string
+AddEventHandler('onResourceStart', function(resource)
+  if resource ~= GetCurrentResourceName() then return end
+  for id, warehouse in pairs(Config.Locations) do
+    TriggerServerEvent('don-forklift:server:Unreserve', id)
+    if (not Config.RequiresJob and Config.Blips) then
+      createBlip(warehouse.jobStart, warehouse['Blips'].label, warehouse['Blips'].sprite, warehouse['Blips'].color, warehouse['Blips'].scale)
+    end
+    createWarehousePeds(id, warehouse)
+  end
+end)
+
+---@param resource string
+AddEventHandler('onResourceStop', function(resource)
+  if resource ~= GetCurrentResourceName() then return end
+  for id, warehouse in pairs(Config.Locations) do
+    TriggerServerEvent("don-forklift:server:Unreserve", id)
+    if Config.ShowBlips then
+      deleteBlipForCoord(warehouse['Blips'].sprite, warehouse.jobStart)
+    end
+  end
+  if response then cancelled = true end
+  if vehicleOut then lendVehicle(getUsersCurrentWarehouse()) end
+  Wait(1000)
+  response, cancelled, jobFinished, vehicleOut = false, false, false, false
+  removePeds()
+end)
+
+-------------------------------- EVENTS --------------------------------
+
+RegisterNetEvent('QBCore:Client:OnPlayerLoaded', function()
+  PlayerData = QBCore.Functions.GetPlayerData()
+  if Config.RequiresJob and PlayerData.job.name ~= Config.Job then return end
+  QBCore.Functions.TriggerCallback('don-forklift:server:GetLocations', function(locations)
+    Config.Locations = locations
+    for id, warehouse in pairs(Config.Locations) do
+      createBlip(warehouse.jobStart, warehouse['Blips'].label, warehouse['Blips'].sprite, warehouse['Blips'].color, warehouse['Blips'].scale)
+      createWarehousePeds(id, warehouse)
+    end
+  end)
+end)
+
+RegisterNetEvent('QBCore:Client:OnPlayerUnload', function()
+  PlayerData = {}
+  if Config.Blips then
+    for id, warehouse in pairs(Config.Locations) do
+      deleteBlipForCoord(warehouse['Blips'].sprite, warehouse.jobStart)
+    end
+  end
+  if isCurrentUserUsingWarehouse() then
+    local current = getUsersCurrentWarehouse()
+    if response then cancelled = true end
+    if vehicleOut then lendVehicle(current) end
+    TriggerServerEvent('don-forklift:server:Unreserve', current)
+  end
+  removePeds()
+end)
+
+---@param JobInfo table
+RegisterNetEvent('QBCore:Client:OnJobUpdate', function(JobInfo)
+  for id, warehouse in pairs(Config.Locations) do
+    if Config.RequiresJob then
+      if JobInfo.name == Config.Job then
+        PlayerData.job = JobInfo 
+        if Config.Blips then 
+          createBlip(warehouse.jobStart, warehouse['Blips'].label, warehouse['Blips'].sprite, warehouse['Blips'].color, warehouse['Blips'].scale)
+        end
+      else
+        deleteBlipForCoord(warehouse['Blips'].sprite, warehouse.jobStart)
+      end
+    else
+      if Config.Blips then 
+        createBlip(warehouse.jobStart, warehouse['Blips'].label, warehouse['Blips'].sprite, warehouse['Blips'].color, warehouse['Blips'].scale)
+      end
+    end
+  end
+end)
+
 ---@param location number
----@param pallet number
-local function spawnPickupVeh(location, pallet)
-  local coords = Config.Locations[location].pickup.coords
-  local deliv = Config.Locations[location].delivery.coords
-  local model = Config.Locations[location].pickup.model
-  local pedMod = Config.Locations[location].pickup.ped
+RegisterNetEvent('don-forklift:client:StartJob', function(location)
+  local ped = PlayerPedId()
+  local identifier = PlayerData.citizenid
+  local inUse = Config.Locations[location].inUse
+  local user = Config.Locations[location].user
+  if not inUse or user == identifier then
+    if response then QBCore.Functions.Notify('Complete the previous order!', 'error') return end
+    if Config.RequiresJob then 
+      if not PlayerData.job then 
+        QBCore.Functions.Notify("You are not a "..Config.Job.."...", "error") 
+        return 
+      end
+    end
+    TriggerServerEvent('don-forklift:server:Reserve', location)
+    local pallet = spawnPallet(location)
+    jobFinished = false
+    cancelled = false
+    response = true
+    TaskStartScenarioInPlace(ped, "WORLD_HUMAN_CLIPBOARD", 0, false)
+    QBCore.Functions.Notify('Delivery is marked...', 'success', 2500)
+    Wait(1000)
+    ClearPedTasks(ped)
+    createBlip(Config.Locations[location]['Garage'].coords, 'Forklift', 357, 28, 0.5)
+    TriggerEvent('don-forklift:client:SpawnPickupVehicle', location, pallet)
+  else
+    QBCore.Functions.Notify('Someone is already doing this order!', 'error')
+  end
+end)
+
+---@param location number
+---@param pallet number Object Handle
+RegisterNetEvent('don-forklift:client:SpawnPickupVehicle', function(location, pallet)
+  local coords = Config.Locations[location]['Pickup']['Spawn'].coords
+  local deliv = Config.Locations[location]['Pickup']['Delivery'].coords
+  local model = Config.Locations[location]['Pickup'].model
+  local pedMod = Config.Locations[location]['Pickup'].ped
   local driving = false
   local doorOpened = false
   reqMod(model)
   ClearAreaOfVehicles(coords, 15.0, false, false, false, false,  false)
-  local pickup = CreateVehicle(model, coords, Config.Locations[location].pickup.heading, true, true)
+  local pickup = CreateVehicle(model, coords, Config.Locations[location]['Pickup']['Spawn'].heading, true, true)
   createPickupBlip(pickup)
   SetEntityAsMissionEntity(pickup)
   SetVehicleDoorsLocked(pickup, 2)
@@ -281,7 +567,7 @@ local function spawnPickupVeh(location, pallet)
   SetEntityInvincible(pilot, true)
   SetDriverAbility(pilot, 1.0) 
   SetDriverAggressiveness(pilot, 0.0)
-  TaskVehiclePark(pilot, pickup, deliv, Config.Locations[location].delivery.heading, 1, 20.0, false)
+  TaskVehiclePark(pilot, pickup, deliv, Config.Locations[location]['Pickup']['Delivery'].heading, 1, 20.0, false)
   SetDriveTaskDrivingStyle(ped, 538968487)
   SetPedKeepTask(pilot, true)
   driving = true
@@ -335,183 +621,11 @@ local function spawnPickupVeh(location, pallet)
     end
   end
   listen4Load(pilot, pickup)
-end
-
----@param ped number
----@param coords vector3
----@return boolean, number 
-local function getClosestWarehouse(ped, coords)
-  local ped = PlayerPedId() or ped
-  local coords = GetEntityCoords(ped) or coords
-  local current = nil
-  local dist = nil
-  for id, warehouse in pairs(Config.Locations) do
-    if current then
-      if #(coords - warehouse.jobStart) < dist then
-        current = id
-        dist = #(coords - warehouse.jobStart)
-      end
-    else
-      dist = #(coords - warehouse.jobStart)
-      current = id
-    end
-  end
-  return current, dist
-end
-
----@return number|nil current
-local function getUsersCurrentWarehouse()
-  local identifier = PlayerData.citizenid
-  for current = 1, #Config.Locations do
-    if Config.Locations[current].inUse and Config.Locations[current].user == identifier then return current end
-  end
-  return nil
-end
-
----@return boolean isUser
-local function isCurrentUserUsingWarehouse()
-  local identifier = PlayerData.citizenid
-  local current, dist = getClosestWarehouse()
-  if Config.Locations[current].inUse and Config.Locations[current].user == identifier then return true end
-  return false
-end
-
----@param location number
-local function lendVehicle(location)
-  local ped = PlayerPedId()
-  local coords = Config.Locations[location].garage.coords
-  local heading = Config.Locations[location].garage.heading
-  local model = Config.Locations[location].garage.model
-  local isUser = isCurrentUserUsingWarehouse()
-  if isUser then
-    if Config.RequiresJob then 
-      if not PlayerData.job then 
-        QBCore.Functions.Notify("You are not a "..Config.Job.."...", "error") 
-        return 
-      end
-    end
-    if not IsPedInAnyVehicle(ped, false)  then
-      QBCore.Functions.SpawnVehicle(model, function(vehicle)
-        SetVehicleNumberPlateText(vehicle, "FORK"..tostring(math.random(1000, 9999)))
-        SetEntityHeading(vehicle, heading)
-        exports['don-fuel']:SetFuel(vehicle, 100.0)
-        TaskWarpPedIntoVehicle(PlayerPedId(), vehicle, -1)
-        SetEntityAsMissionEntity(vehicle, true, true)
-        TriggerEvent("vehiclekeys:client:SetOwner", GetVehicleNumberPlateText(vehicle))
-        SetVehicleEngineOn(vehicle, true, true)
-        QBCore.Functions.Notify("Forklift retrieved from garage...", "success")
-        vehicleOut = true
-      end, coords, true)
-    else
-      local veh = GetVehiclePedIsIn(ped, false)
-      local plate = GetVehicleNumberPlateText(veh)
-      if plate:sub(1, 4) == "FORK" then
-        QBCore.Functions.DeleteVehicle(veh)
-        QBCore.Functions.Notify("Forklift returned to garage...", "success")
-        vehicleOut = false
-      else
-        QBCore.Functions.Notify("You are not in a forklift...", "error")
-      end
-    end
-  end
-end
-
--------------------------------- HANDLERS --------------------------------
-
-AddEventHandler('onResourceStop', function(resource)
-  if resource ~= GetCurrentResourceName() then return end
-  for id, warehouse in pairs(Config.Locations) do
-    TriggerServerEvent("don-forklift:server:Unreserve", id)
-    if Config.ShowBlips then
-      deleteBlipForCoord(warehouse.blipSettings.sprite, warehouse.jobStart)
-    end
-  end
-  if response then cancelled = true end
-  if vehicleOut then lendVehicle(getUsersCurrentWarehouse()) end
-  Wait(1000)
-  response, cancelled, jobFinished, vehicleOut = false, false, false, false
 end)
 
-AddEventHandler('onResourceStart', function(resource)
-  if resource ~= GetCurrentResourceName() then return end
-  for id, warehouse in pairs(Config.Locations) do
-    TriggerServerEvent('don-forklift:server:Unreserve', id)
-    if (not Config.RequiresJob and Config.Blips) then
-      createBlip(warehouse.jobStart, warehouse.blipSettings.label, warehouse.blipSettings.sprite, warehouse.blipSettings.color, warehouse.blipSettings.scale)
-    end
-  end
-end)
-
--------------------------------- EVENTS --------------------------------
-
-RegisterNetEvent('QBCore:Client:OnPlayerLoaded', function()
-  PlayerData = QBCore.Functions.GetPlayerData()
-  if Config.RequiresJob and PlayerData.job.name ~= Config.Job then return end
-  QBCore.Functions.TriggerCallback('don-forklift:server:GetLocations', function(locations)
-    Config.Locations = locations
-    for id, warehouse in pairs(Config.Locations) do
-      createBlip(warehouse.jobStart, warehouse.blipSettings.label, warehouse.blipSettings.sprite, warehouse.blipSettings.color, warehouse.blipSettings.scale)
-    end
-  end)
-end)
-
-RegisterNetEvent('QBCore:Client:OnPlayerUnload', function()
-  PlayerData = {}
-  if Config.Blips then
-    for id, warehouse in pairs(Config.Locations) do
-      deleteBlipForCoord(warehouse.blipSettings.sprite, warehouse.jobStart)
-    end
-  end
-end)
-
-RegisterNetEvent('QBCore:Client:OnJobUpdate', function(JobInfo)
-  for id, warehouse in pairs(Config.Locations) do
-    if Config.RequiresJob then
-      if JobInfo.name == Config.Job then
-        PlayerData.job = JobInfo 
-        if Config.Blips then 
-          createBlip(warehouse.jobStart, warehouse.blipSettings.label, warehouse.blipSettings.sprite, warehouse.blipSettings.color, warehouse.blipSettings.scale)
-        end
-      else
-        deleteBlipForCoord(warehouse.blipSettings.sprite, warehouse.jobStart)
-      end
-    else
-      if Config.Blips then 
-        createBlip(warehouse.jobStart, warehouse.blipSettings.label, warehouse.blipSettings.sprite, warehouse.blipSettings.color, warehouse.blipSettings.scale)
-      end
-    end
-  end
-end)
-
-RegisterNetEvent('don-forklift:client:StartJob', function(location)
-  local ped = PlayerPedId()
-  local identifier = PlayerData.citizenid
-  local inUse = Config.Locations[location].inUse
-  local user = Config.Locations[location].user
-  if not inUse or user == identifier then
-    if response then QBCore.Functions.Notify('Complete the previous order!', 'error') return end
-    if Config.RequiresJob then 
-      if not PlayerData.job then 
-        QBCore.Functions.Notify("You are not a "..Config.Job.."...", "error") 
-        return 
-      end
-    end
-    TriggerServerEvent('don-forklift:server:Reserve', location)
-    local pallet = spawnPallet(location)
-    jobFinished = false
-    cancelled = false
-    response = true
-    TaskStartScenarioInPlace(ped, "WORLD_HUMAN_CLIPBOARD", 0, false)
-    QBCore.Functions.Notify('Delivery is marked...', 'success', 2500)
-    Wait(1000)
-    ClearPedTasks(ped)
-    createBlip(Config.Locations[location].garage.coords, 'Forklift', 357, 28, 0.5)
-    spawnPickupVeh(location, pallet)
-  else
-    QBCore.Functions.Notify('Someone is already doing this order!', 'error')
-  end
-end)
-
+---@param current number
+---@param isDamaged boolean
+---@param health number
 RegisterNetEvent('don-forklift:client:FinishDelivery', function(current, isDamaged, health)
   jobFinished = true
   response = false 
@@ -536,6 +650,7 @@ RegisterNetEvent('don-forklift:client:FinishDelivery', function(current, isDamag
   end
 end)
 
+---@param location number
 RegisterNetEvent('don-forklift:client:CancelJob', function(location)
   if location then
     if isCurrentUserUsingWarehouse() then
@@ -549,100 +664,26 @@ RegisterNetEvent('don-forklift:client:CancelJob', function(location)
   end
 end)
 
-RegisterNetEvent('don-forklift:client:Reserve', function(k, identifier)
-  if k then
-    if Config.Locations[k] then
-      if not Config.Locations[k].user and not Config.Locations[k].inUse then
-        Config.Locations[k].inUse = true
-        Config.Locations[k].user = identifier
+---@param location number
+---@param identifier string
+RegisterNetEvent('don-forklift:client:Reserve', function(location, identifier)
+  if location then
+    if Config.Locations[location] then
+      if not Config.Locations[location].user and not Config.Locations[location].inUse then
+        Config.Locations[location].inUse = true
+        Config.Locations[location].user = identifier
       end
     end
   end
 end)
 
+---@param k number
 RegisterNetEvent('don-forklift:client:Unreserve', function(k)
   if k then
     Config.Locations[k].inUse = false
     Config.Locations[k].user = nil
   end
 end)
-
--------------------------------- TARGET --------------------------------
-
-if Config.UseTarget then
-  for k, v in pairs(Config.Locations) do
-    exports['qb-target']:AddBoxZone('garage' ..k, v.garage.zone.coords, v.garage.zone.length, v.garage.zone.width, {
-      name = 'garage' ..k,
-      heading = v.garage.zone.heading,
-      debugPoly = false,
-      minZ= v.garage.zone.coords.z - 1,
-      maxZ= v.garage.zone.coords.z + 1
-      }, {
-        options = {
-          {
-          type = 'client',
-          icon = 'fas fa-warehouse',
-          label = 'Take Forklift',
-          action = function()
-            lendVehicle(k)
-          end,
-          canInteract = function() -- Checks if the warehouse is in use
-            if vehicleOut or not v.inUse then return false end
-              return true
-            end
-          },
-          {
-          type = "client",
-          icon = 'fas fa-warehouse',
-          label = 'Return Forklift',
-          action = function()
-            lendVehicle(k)
-          end,
-          canInteract = function() -- Checks if the warehouse is in use
-            if not vehicleOut or not v.inUse then return false end
-              return true
-            end
-          }
-        },
-        distance = 2.0 -- This is the distance for you to be at for the target to turn blue, this is in GTA units and has to be a float value
-      }
-    )
-    exports['qb-target']:AddBoxZone('warehouse' ..k, v.jobStart, v.boxzone.length, v.boxzone.width, {
-      name = 'warehouse' ..k,
-      heading = v.boxzone.heading,
-      debugPoly = false,
-      minZ= v.jobStart.z - 1,
-      maxZ= v.jobStart.z + 1
-      }, {
-        options = {
-          {
-          icon = 'fas fa-truck-fast',
-          label = 'Take Order',
-          action = function ()
-              TriggerEvent('don-forklift:client:StartJob', k)   
-            end,
-          canInteract = function() -- Checks if the warehouse is in use
-            if v.inUse and not jobFinished then return false end
-              return true
-            end
-          },
-          {
-          icon = 'fas fa-sign-out-alt',
-          label = 'Cancel Order',
-          action = function ()
-              TriggerEvent('don-forklift:client:CancelJob', k)   
-            end,
-          canInteract = function() -- Checks if the warehouse is in use
-            if not isCurrentUserUsingWarehouse() or jobFinished then return false end
-              return true
-            end
-          }
-        },
-        distance = 2.0 -- This is the distance for you to be at for the target to turn blue, this is in GTA units and has to be a float value
-      }
-    )
-  end
-end
 
 -------------------------------- DRAWTEXT --------------------------------
 
@@ -697,16 +738,16 @@ CreateThread(function()
       if isCurrentUserUsingWarehouse() then
         local ped = PlayerPedId()
         local coords = GetEntityCoords(ped)
-        local dist = #(coords - Config.Locations[current].garage.coords)
+        local dist = #(coords - Config.Locations[current]['Garage'].coords)
         if dist < 5.0 then
           sleep = 0
           if not vehicleOut then
-            drawText3D(Config.Locations[current].garage.coords.x, Config.Locations[current].garage.coords.y, Config.Locations[current].garage.coords.z, '[~g~E~w~] - Take Forklift')
+            drawText3D(Config.Locations[current]['Garage'].coords.x, Config.Locations[current]['Garage'].coords.y, Config.Locations[current]['Garage'].coords.z, '[~g~E~w~] - Take Forklift')
             if IsControlJustReleased(0, 38) or IsDisabledControlJustReleased(0, 38) then
               lendVehicle(current)
             end
           elseif vehicleOut then
-            drawText3D(Config.Locations[current].garage.coords.x, Config.Locations[current].garage.coords.y, Config.Locations[current].garage.coords.z, '[~r~E~w~] - Return Forklift')
+            drawText3D(Config.Locations[current]['Garage'].coords.x, Config.Locations[current]['Garage'].coords.y, Config.Locations[current]['Garage'].coords.z, '[~r~E~w~] - Return Forklift')
             if IsControlJustReleased(0, 38) or IsDisabledControlJustReleased(0, 38) then
               lendVehicle(current)
             end
