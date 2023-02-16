@@ -3,7 +3,7 @@ Config = {}
 Config.UseTarget = true -- Set to false if you want to use 3DText instead of QBTarget
 
 Config.Blips = true -- Enable blips on the map
-Config.BlipName = "Warehouse Logistics"
+Config.BlipName = 'Warehouse Logistics'
 Config.UniqueNames = true -- Enable unique names for each warehouse
 
 Config.PalletModel = `prop_boxpile_06a` -- Pallet model

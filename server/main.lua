@@ -53,7 +53,7 @@ RegisterServerEvent('don-forklift:server:PayPlayer', function(current, bonus)
 	end
 end)
 
--------------------------------- CALLBACKS --------------------------------
+-------------------------------- QBCORE --------------------------------
 
 ---@param cb function
 ---@return table
@@ -64,8 +64,6 @@ QBCore.Functions.CreateCallback('don-forklift:server:GetLocations', function(sou
 	if Config.RequiresJob and Player.PlayerData.job.name ~= Config.Job then return end
 	cb(Config.Locations)
 end)
-
--------------------------------- JOB --------------------------------
 
 if Config.RequiresJob then
 	QBCore.Functions.AddJobs(Config.Job['logistics'])
