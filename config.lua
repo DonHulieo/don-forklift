@@ -13,6 +13,8 @@ Config.PalletMarkers = { -- Pallet markers | https://docs.fivem.net/docs/game-re
 	scale = {x = 1.0, y = 1.0, z = 1.0}
 }
 
+Config.FuelSystem = 'LegacyFuel' -- Fuel system your server is using 
+
 Config.RequiresJob = false -- Enable if you want to require a job to an order
 Config.Job = {
 	['logistics'] = {
