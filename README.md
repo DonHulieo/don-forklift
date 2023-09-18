@@ -16,7 +16,7 @@ Warehousing script for QBCore
 - Can be used for a specific job (set in the config) or for anyone as an activity
 - Can be configured for multiple warehouses (set in the config) ~ Supports 3 warehouses by default and Ultrunz's Warehouse
 - Earn Bonus Money for completing the job without damaging the pallets
-- A percantage of money earned through deliveries is sent to the business society
+- A percentage of money earned through deliveries is sent to the business society
 
 ## Installation
 
@@ -26,6 +26,33 @@ Warehousing script for QBCore
 - Edit the config.lua to your liking
 
 - **Note:** If RequiresJob is set to true, the job can be set in the config, if set to false, the job is not required.
+
+### When using the Job Requirement
+
+- You don't need to add the job to your qb-core config, as it will be added automatically
+- Find the following code in qb-cityhall/server/main.lua, in the 'qb-cityhall:server:ApplyJob' Event
+
+```lua
+  if QBCore.Shared.QBJobsStatus then
+    exports["qb-jobs"]:submitApplication(data, "Jobs")
+  else
+    local JobInfo = QBCore.Shared.Jobs[job]
+    Player.Functions.SetJob(data.job, 0)
+    TriggerClientEvent('QBCore:Notify', data.src, Lang:t('info.new_job', { job = JobInfo.label }))
+  end
+```
+
+- Replace it with the following code
+
+```lua
+  if QBCore.Shared.QBJobsStatus then
+    exports["qb-jobs"]:submitApplication(data, "Jobs")
+  else
+    local JobInfo = QBCore.Shared.Jobs[job] or availableJobs[job]
+    Player.Functions.SetJob(data.job, 0)
+    TriggerClientEvent('QBCore:Notify', data.src, Lang:t('info.new_job', { job = JobInfo.label }))
+  end
+```
 
 ## Job Locations
 

@@ -66,7 +66,12 @@ QBCore.Functions.CreateCallback('don-forklift:server:GetLocations', function(sou
 end)
 
 if Config.RequiresJob then
-	QBCore.Functions.AddJobs(Config.Job['logistics'])
+	local function getK()
+		for k in pairs(Config.Job) do return k end
+	end
+	local tableName = getK()
+	QBCore.Functions.AddJob(tableName, Config.Job[tableName])
+	exports['qb-cityhall']:AddCityJob(tableName, {label = Config.Job[tableName].label, isManaged = Config.IsManaged})
 end
 
 -------------------------------- THREADS --------------------------------

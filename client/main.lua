@@ -171,7 +171,6 @@ local function getUsersCurrentWarehouse()
   for current = 1, #Config.Locations do
     if Config.Locations[current].inUse and Config.Locations[current].user == identifier then return current end
   end
-  return nil
 end
 
 ---@param location number
@@ -535,7 +534,11 @@ end)
 RegisterNetEvent('QBCore:Client:OnJobUpdate', function(JobInfo)
   for id, warehouse in pairs(Config.Locations) do
     if Config.RequiresJob then
-      if JobInfo.name == Config.Job then
+      local function getK()
+        for k in pairs(Config.Job) do return k end
+      end
+      local tableName = getK()
+      if JobInfo.name == tableName then
         PlayerData.job = JobInfo 
         if Config.Blips then 
           createBlip(warehouse['Start'].coords, warehouse['Blips'].label, warehouse['Blips'].sprite, warehouse['Blips'].color, warehouse['Blips'].scale)
