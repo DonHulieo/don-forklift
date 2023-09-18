@@ -20,7 +20,7 @@ Warehousing script for QBCore
 
 ## Installation
 
-- Download the latest release from [here]()
+- Download the latest release from [here](https://github.com/DonHulieo/don-forklift/releases/tag/v1.2)
 - Extract the don-forklift folder to your resources folder
 - Add `ensure don-forklift` to your server.cfg
 - Edit the config.lua to your liking
