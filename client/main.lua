@@ -504,11 +504,19 @@ end)
 
 RegisterNetEvent('QBCore:Client:OnPlayerLoaded', function()
   PlayerData = QBCore.Functions.GetPlayerData()
-  if Config.RequiresJob and PlayerData.job.name ~= Config.Job then return end
+  if Config.RequiresJob then
+    local function getK()
+      for k in pairs(Config.Job) do return k end
+    end
+    local tableName = getK()
+    if PlayerData.job.name ~= tableName then return end
+  end
   QBCore.Functions.TriggerCallback('don-forklift:server:GetLocations', function(locations)
     Config.Locations = locations
     for id, warehouse in pairs(Config.Locations) do
-      createBlip(warehouse['Start'].coords, warehouse['Blips'].label, warehouse['Blips'].sprite, warehouse['Blips'].color, warehouse['Blips'].scale)
+      if Config.Blips then
+        createBlip(warehouse['Start'].coords, warehouse['Blips'].label, warehouse['Blips'].sprite, warehouse['Blips'].color, warehouse['Blips'].scale)
+      end
       createWarehousePeds(id, warehouse)
     end
   end)
