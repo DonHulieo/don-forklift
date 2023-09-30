@@ -475,9 +475,12 @@ end
 ---@param resource string
 AddEventHandler('onResourceStart', function(resource)
   if resource ~= GetCurrentResourceName() then return end
+  local function getK(table)
+    for k in pairs(table) do return k end
+  end
   for id, warehouse in pairs(Config.Locations) do
     TriggerServerEvent('don-forklift:server:Unreserve', id)
-    if (not Config.RequiresJob and Config.Blips) then
+    if Config.Blips and (not Config.RequiresJob or Config.RequiresJob and PlayerData.job.name == getK(Config.Job)) then
       createBlip(warehouse['Start'].coords, warehouse['Blips'].label, warehouse['Blips'].sprite, warehouse['Blips'].color, warehouse['Blips'].scale)
     end
     createWarehousePeds(id, warehouse)
@@ -504,22 +507,19 @@ end)
 
 RegisterNetEvent('QBCore:Client:OnPlayerLoaded', function()
   PlayerData = QBCore.Functions.GetPlayerData()
-  if Config.RequiresJob then
-    local function getK()
-      for k in pairs(Config.Job) do return k end
-    end
-    local tableName = getK()
-    if PlayerData.job.name ~= tableName then return end
+  local function getK(table)
+    for k in pairs(table) do return k end
   end
+  local blips = Config.Blips and (Config.RequiresJob and PlayerData.job.name == getK(Config.Job) or not Config.RequiresJob) and true or false
   QBCore.Functions.TriggerCallback('don-forklift:server:GetLocations', function(locations)
     Config.Locations = locations
-    for id, warehouse in pairs(Config.Locations) do
-      if Config.Blips then
-        createBlip(warehouse['Start'].coords, warehouse['Blips'].label, warehouse['Blips'].sprite, warehouse['Blips'].color, warehouse['Blips'].scale)
-      end
-      createWarehousePeds(id, warehouse)
-    end
   end)
+  for id, warehouse in pairs(Config.Locations) do
+    if blips then
+      createBlip(warehouse['Start'].coords, warehouse['Blips'].label, warehouse['Blips'].sprite, warehouse['Blips'].color, warehouse['Blips'].scale)
+    end
+    createWarehousePeds(id, warehouse)
+  end
 end)
 
 RegisterNetEvent('QBCore:Client:OnPlayerUnload', function()
