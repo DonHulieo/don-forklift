@@ -1,4 +1,46 @@
 local QBCore = exports['qb-core']:GetCoreObject()
+local LOCATIONS <const> = Config.Locations
+local RES_NAME <const> = GetCurrentResourceName()
+local Warehouses = {}
+
+-------------------------------- FUNCTIONS --------------------------------
+
+---@param model number|string
+---@param coords vector4|{x: number, y: number, z: number, w: number}
+---@param data {key: integer, type: string}
+---@return integer ped
+local function create_ped(model, coords, data)
+	local ped = CreatePed(4, model, coords.x, coords.y, coords.z, coords.w, true, true)
+	SetPedRandomComponentVariation(ped, 0)
+	Entity(ped).state['forklift'] = {spawn = true, wh_key = data.key, type = data.type}
+	return ped
+end
+
+---@param resource string?
+local function init_script(resource)
+	if resource and type(resource) == 'string' and resource ~= RES_NAME then return end
+	Warehouses.peds = {}
+	local peds = Warehouses.peds
+	for i = 1, #LOCATIONS do
+		local location = LOCATIONS[i]
+		local start, garage = location['Start'], location['Garage']
+		Warehouses[i] = Warehouses[i] or {}
+		peds[#peds + 1] = create_ped(start.ped, vec(start.coords.xyz, start.heading), {key = i, type = 'Start'})
+		peds[#peds + 1] = create_ped(garage.ped, vec(garage.coords.xyz, garage.heading), {key = i, type = 'Garage'})
+	end
+end
+
+---@param resource string?
+local function deinit_script(resource)
+	if resource and type(resource) == 'string' and resource ~= RES_NAME then return end
+	for i = 1, #Warehouses.peds do
+		DeleteEntity(Warehouses.peds[i])
+	end
+end
+
+-------------------------------- HANDLERS --------------------------------
+AddEventHandler('onResourceStart', init_script)
+AddEventHandler('onResourceStop', deinit_script)
 
 -------------------------------- EVENTS --------------------------------
 

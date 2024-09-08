@@ -1,11 +1,13 @@
+local duff = duff
+local blips, bridge = duff.blips, duff.bridge
+
 local QBCore = exports['qb-core']:GetCoreObject()
 local PlayerData = QBCore.Functions.GetPlayerData()
 local response, cancelled, jobFinished, vehicleOut = false, false, false, false
 
----@alias vector3 table
----| 'x' number X Coordinate
----| 'y' number Y Coordinate
----| 'z' number Z Coordinate
+local RES_NAME <const> = GetCurrentResourceName()
+local LOCATIONS <const> = Config.Locations
+local Warehouses = {}
 
 -------------------------------- FUNCTIONS --------------------------------
 
@@ -38,6 +40,30 @@ local function createBlip(coords, text, sprite, color, scale)
   SetBlipAsShortRange(blip, true)
   AddTextEntry(text, text)
   BeginTextCommandSetBlipName(text)
+  EndTextCommandSetBlipName(blip)
+  return blip
+end
+
+---@param key string
+---@param label string
+local function add_label(key, label)
+  if DoesTextLabelExist(key) and GetLabelText(key) == label then return end
+  AddTextEntry(key, label)
+end
+
+---@param blip integer
+---@param sprite number
+---@param scale number
+---@param colour number
+---@return number blip
+local function setup_blip(blip, sprite, scale, colour, key)
+  SetBlipSprite(blip, sprite)
+  SetBlipCategory(blip, 1)
+  SetBlipDisplay(blip, 4)
+  SetBlipScale(blip, scale)
+  SetBlipColour(blip, colour)
+  SetBlipAsShortRange(blip, true)
+  BeginTextCommandSetBlipName(key)
   EndTextCommandSetBlipName(blip)
   return blip
 end
@@ -470,57 +496,127 @@ local function listen4Load(ped, veh)
   end)
 end
 
--------------------------------- HANDLERS --------------------------------
-
----@param resource string
-AddEventHandler('onResourceStart', function(resource)
-  if resource ~= GetCurrentResourceName() then return end
-  local function getK(table)
-    for k in pairs(table) do return k end
-  end
-  for id, warehouse in pairs(Config.Locations) do
-    TriggerServerEvent('don-forklift:server:Unreserve', id)
-    if Config.Blips and (not Config.RequiresJob or Config.RequiresJob and PlayerData.job.name == getK(Config.Job)) then
-      createBlip(warehouse['Start'].coords, warehouse['Blips'].label, warehouse['Blips'].sprite, warehouse['Blips'].color, warehouse['Blips'].scale)
+---@param resource string? Starting resource name or nil.
+local function init_script(resource)
+  if resource and type(resource) == 'string' and resource ~= RES_NAME then return end
+  for i = 1, #LOCATIONS do
+    local location = LOCATIONS[i]
+    Warehouses[i] = Warehouses[i] or {}
+    if Config.Blips and not Warehouses[i].blip then
+      local coords = location['Start'].coords
+      Warehouses[i].blip = AddBlipForCoord(coords.x, coords.y, coords.z)
+      local is_unique = Config.UniqueNames
+      local key = is_unique and 'forklift_main_blip'..i or 'forklift_main_blip'
+      local name = is_unique and location['Blips'].label or Config.BlipName
+      local warehouse = Warehouses[i]
+      add_label(key, name)
+      setup_blip(warehouse.blip, location['Blips'].sprite, location['Blips'].scale, location['Blips'].color, key)
     end
-    createWarehousePeds(id, warehouse)
+    -- createWarehousePeds(i, location)
   end
-end)
+end
 
----@param resource string
-AddEventHandler('onResourceStop', function(resource)
-  if resource ~= GetCurrentResourceName() then return end
-  for id, warehouse in pairs(Config.Locations) do
-    TriggerServerEvent("don-forklift:server:Unreserve", id)
-    if Config.ShowBlips then
-      deleteBlipForCoord(warehouse['Blips'].sprite, warehouse.jobStart)
+---@param resource string? Stopping resource name or nil.
+local function deinit_script(resource)
+  if resource and type(resource) == 'string' and resource ~= RES_NAME then return end
+  for i = 1, #LOCATIONS do
+    local location = LOCATIONS[i]
+    local warehouse = Warehouses[i]
+    if Config.Blips then
+      RemoveBlip(warehouse.blip)
     end
   end
-  if response then cancelled = true end
-  if vehicleOut then lendVehicle(getUsersCurrentWarehouse()) end
-  Wait(1000)
-  response, cancelled, jobFinished, vehicleOut = false, false, false, false
+  if isCurrentUserUsingWarehouse() then
+    local current = getUsersCurrentWarehouse()
+    if response then cancelled = true end
+    if vehicleOut and current then lendVehicle(current) end
+    TriggerServerEvent('don-forklift:server:Unreserve', current)
+  end
   removePeds()
+end
+
+---@param ped integer
+local function init_ped(ped)
+  SetBlockingOfNonTemporaryEvents(ped, true)
+  SetEntityInvincible(ped, true)
+  SetPedDiesWhenInjured(ped, false)
+  SetPedCanPlayAmbientAnims(ped, true)
+  SetPedCanRagdollFromPlayerImpact(ped, false)
+  FreezeEntityPosition(ped, true)
+end
+
+---@param ped integer
+---@param scenario_data {scenario: string, coords: vector3, heading: number, chair: string|number?}
+local function setup_ped_scenario(ped, scenario_data)
+  if scenario_data.chair then
+    local chair = GetClosestObjectOfType(scenario_data.coords.x, scenario_data.coords.y, scenario_data.coords.z, 1.0, scenario_data.chair, false, false, false)
+    ---@diagnostic disable-next-line: redundant-parameter
+    if DoesEntityExist(chair) then AttachEntityToEntity(chair, ped, GetPedBoneIndex(ped, 0xE0FD), 0.0, 0.0, 0.5, 0.0, 0.0, scenario_data.heading, true, true, false, true, 2, true, false) end
+    ProcessEntityAttachments(ped)
+  end
+  TaskStartScenarioInPlace(ped, scenario_data.scenario, 0, true)
+end
+
+-------------------------------- HANDLERS --------------------------------
+AddEventHandler('onResourceStart', init_script)
+AddEventHandler('onResourceStop', deinit_script)
+
+AddStateBagChangeHandler('forklift', '', function(name, key, value, _, replicated)
+  if not value or replicated then return end
+  local entity = GetEntityFromStateBagName(name)
+  if entity == 0 then return end
+  print(key, json.encode(value), entity)
+  local wh_key = value['wh_key']
+  local wh_type = value['type']
+  local is_start = wh_type == 'Start'
+  init_ped(entity)
+  setup_ped_scenario(entity, LOCATIONS[wh_key][wh_type])
+  Warehouses[wh_key][wh_type] = Warehouses[wh_key][wh_type] or {}
+  Warehouses[wh_key][wh_type].target = true and bridge.addlocalentity(entity, {
+    {
+      name = 'forklift_'..wh_type:lower()..'_target_'..wh_key,
+      label = is_start and 'Take Order' or 'Take Forklift',
+      icon = is_start and 'fas fa-truck-fast' or 'fas fa-warehouse',
+      action = function()
+        if is_start then
+          TriggerEvent('don-forklift:client:StartJob', wh_key)
+        else
+          lendVehicle(wh_key)
+        end
+      end,
+      canInteract = function()
+        if is_start then
+          return not LOCATIONS[wh_key].inUse and not jobFinished
+        else
+          return not vehicleOut and LOCATIONS[wh_key].inUse
+        end
+      end
+    },
+    {
+      name = 'forklift_'..wh_type:lower()..'_target_cancel_'..wh_key,
+      label = is_start and 'Cancel Order' or 'Return Forklift',
+      icon = 'fas fa-sign-out-alt',
+      action = function()
+        if is_start then
+          TriggerEvent('don-forklift:client:CancelJob', wh_key)
+        else
+          lendVehicle(wh_key)
+        end
+      end,
+      canInteract = function()
+        if is_start then
+          return isCurrentUserUsingWarehouse() and not jobFinished
+        else
+          return vehicleOut and LOCATIONS[wh_key].inUse
+        end
+      end
+    }
+  })
 end)
 
 -------------------------------- EVENTS --------------------------------
 
-RegisterNetEvent('QBCore:Client:OnPlayerLoaded', function()
-  PlayerData = QBCore.Functions.GetPlayerData()
-  local function getK(table)
-    for k in pairs(table) do return k end
-  end
-  local blips = Config.Blips and (Config.RequiresJob and PlayerData.job.name == getK(Config.Job) or not Config.RequiresJob) and true or false
-  QBCore.Functions.TriggerCallback('don-forklift:server:GetLocations', function(locations)
-    Config.Locations = locations
-  end)
-  for id, warehouse in pairs(Config.Locations) do
-    if blips then
-      createBlip(warehouse['Start'].coords, warehouse['Blips'].label, warehouse['Blips'].sprite, warehouse['Blips'].color, warehouse['Blips'].scale)
-    end
-    createWarehousePeds(id, warehouse)
-  end
-end)
+RegisterNetEvent('QBCore:Client:OnPlayerLoaded', init_script)
 
 RegisterNetEvent('QBCore:Client:OnPlayerUnload', function()
   PlayerData = {}
