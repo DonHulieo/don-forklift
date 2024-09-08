@@ -1,18 +1,31 @@
+local duff = duff
+local bridge, require = duff.bridge, duff.package.require
+---@module 'don-forklift.shared.config'
+local config = require 'shared.config'
+local DEBUG_MODE <const> = config.DebugMode
+local LOCATIONS <const> = config.Locations
+
 local QBCore = exports['qb-core']:GetCoreObject()
-local LOCATIONS <const> = Config.Locations
 local RES_NAME <const> = GetCurrentResourceName()
 local Warehouses = {}
 
 -------------------------------- FUNCTIONS --------------------------------
 
+---@param text string
+local function debug_print(text)
+  if not DEBUG_MODE then return end
+  print('^3[don^7-^3forklift]^7 - '..text)
+end
+
 ---@param model number|string
 ---@param coords vector4|{x: number, y: number, z: number, w: number}
----@param data {key: integer, type: string}
+---@param key integer
+---@param ped_type 'sign_up'|'garage'
 ---@return integer ped
-local function create_ped(model, coords, data)
+local function create_ped(model, coords, key, ped_type)
 	local ped = CreatePed(4, model, coords.x, coords.y, coords.z, coords.w, true, true)
 	SetPedRandomComponentVariation(ped, 0)
-	Entity(ped).state['forklift'] = {spawn = true, wh_key = data.key, type = data.type}
+	Entity(ped).state['forklift:init'] = {spawn = true, wh_key = key, type = ped_type}
 	return ped
 end
 
@@ -20,13 +33,16 @@ end
 local function init_script(resource)
 	if resource and type(resource) == 'string' and resource ~= RES_NAME then return end
 	Warehouses.peds = {}
-	local peds = Warehouses.peds
+	local wh_peds = Warehouses.peds
 	for i = 1, #LOCATIONS do
 		local location = LOCATIONS[i]
-		local start, garage = location['Start'], location['Garage']
+		local peds = location['Peds']
 		Warehouses[i] = Warehouses[i] or {}
-		peds[#peds + 1] = create_ped(start.ped, vec(start.coords.xyz, start.heading), {key = i, type = 'Start'})
-		peds[#peds + 1] = create_ped(garage.ped, vec(garage.coords.xyz, garage.heading), {key = i, type = 'Garage'})
+		for j = 1, #peds do
+			local ped_data = peds[j]
+			---@diagnostic disable-next-line: param-type-mismatch
+			wh_peds[#wh_peds + 1] = create_ped(ped_data.model, ped_data.coords, i, j == 1 and 'sign_up' or 'garage')
+		end
 	end
 end
 
@@ -36,6 +52,18 @@ local function deinit_script(resource)
 	for i = 1, #Warehouses.peds do
 		DeleteEntity(Warehouses.peds[i])
 	end
+end
+
+---@param warehouse integer
+---@param identifier string
+---@param reserve boolean
+local function reserve_warehouse(warehouse, identifier, reserve)
+	if not LOCATIONS[warehouse] then return end
+	local src = source
+	if identifier ~= bridge.getidentifier(src) then return end
+	GlobalState:set('forklift:'..warehouse, reserve and identifier or nil, true)
+	if not reserve then GlobalState:set('forklift:'..warehouse..':last', identifier, true) end
+	debug_print((reserve and 'Reserved' or 'Unreserved')..' warehouse '..warehouse..' for '..bridge.getplayername(src)..' ('..identifier..')')
 end
 
 -------------------------------- HANDLERS --------------------------------

@@ -15,8 +15,8 @@ Config.PalletMarkers = { -- Pallet markers | https://docs.fivem.net/docs/game-re
 
 Config.FuelSystem = 'LegacyFuel' -- Fuel system your server is using 
 
-Config.RequiresJob = true -- Enable if you want to require a job to an order
-Config.IsManaged = true -- Enable if you want to use the QB-Cityhall job management system
+Config.RequiresJob = false -- Enable if you want to require a job to an order
+Config.IsManaged = false -- Enable if you want to use the QB-Cityhall job management system
 Config.Job = {
 	['logistics'] = {
 		label = 'Warehouse Logistics',

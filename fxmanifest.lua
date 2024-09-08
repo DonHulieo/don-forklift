@@ -5,7 +5,7 @@ author 'DonHulieo'
 description 'Warehousing Job for QBCore'
 version '1.2.2'
 
-shared_scripts {'config.lua'}
+shared_scripts {'@duff/shared/import.lua', 'config.lua'}
 
 client_scripts {'client/main.lua'}
 

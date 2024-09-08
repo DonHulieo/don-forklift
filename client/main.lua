@@ -1,12 +1,17 @@
 local duff = duff
-local blips, bridge = duff.blips, duff.bridge
+local iblips = exports.iblips
+local await, blips, bridge, math, require = duff.await, duff.blips, duff.bridge, duff.math, duff.package.require
+---@module 'don-forklift.shared.config'
+local config = require 'shared.config'
+local DEBUG_MODE <const> = config.DebugMode
+local LOCATIONS <const> = config.Locations
+local LOAD_EVENT <const>, UNLOAD_EVENT <const> = bridge['_DATA']['EVENTS'].LOAD, bridge['_DATA']['EVENTS'].UNLOAD
 
 local QBCore = exports['qb-core']:GetCoreObject()
 local PlayerData = QBCore.Functions.GetPlayerData()
 local response, cancelled, jobFinished, vehicleOut = false, false, false, false
 
 local RES_NAME <const> = GetCurrentResourceName()
-local LOCATIONS <const> = Config.Locations
 local Warehouses = {}
 
 -------------------------------- FUNCTIONS --------------------------------
@@ -501,19 +506,20 @@ local function init_script(resource)
   if resource and type(resource) == 'string' and resource ~= RES_NAME then return end
   for i = 1, #LOCATIONS do
     local location = LOCATIONS[i]
+    local coords = location.coords
+    local blip_data = location.blip
     Warehouses[i] = Warehouses[i] or {}
-    if Config.Blips and not Warehouses[i].blip then
-      local coords = location['Start'].coords
-      Warehouses[i].blip = AddBlipForCoord(coords.x, coords.y, coords.z)
-      local is_unique = Config.UniqueNames
-      local key = is_unique and 'forklift_main_blip'..i or 'forklift_main_blip'
-      local name = is_unique and location['Blips'].label or Config.BlipName
-      local warehouse = Warehouses[i]
-      add_label(key, name)
-      setup_blip(warehouse.blip, location['Blips'].sprite, location['Blips'].scale, location['Blips'].color, key)
-    end
-    -- createWarehousePeds(i, location)
+    Warehouses[i].blip = blip_data.enabled and iblips:initblip('coord', {coords = coords}, blip_data.options)
   end
+end
+
+---@param location integer
+---@return boolean?, integer?
+local function is_player_using_warehouse(location)
+  local identifier = bridge.getidentifier()
+  location = location or GetClosestWarehouse()
+  if not LOCATIONS[location] then return end
+  return GlobalState['forklift:'..location] == identifier
 end
 
 ---@param resource string? Stopping resource name or nil.
@@ -522,17 +528,30 @@ local function deinit_script(resource)
   for i = 1, #LOCATIONS do
     local location = LOCATIONS[i]
     local warehouse = Warehouses[i]
-    if Config.Blips then
-      RemoveBlip(warehouse.blip)
+    if location.blip.enabled then blips.remove(warehouse.blip) end
+    if is_player_using_warehouse(i) then
+      if response then cancelled = true end
+      if vehicleOut and i then lendVehicle(i) end
+      TriggerServerEvent('don-forklift:server:Unreserve', i)
     end
   end
-  if isCurrentUserUsingWarehouse() then
-    local current = getUsersCurrentWarehouse()
-    if response then cancelled = true end
-    if vehicleOut and current then lendVehicle(current) end
-    TriggerServerEvent('don-forklift:server:Unreserve', current)
-  end
   removePeds()
+end
+
+---@param entity integer
+---@return boolean
+local function catch_entity(entity)
+  local game_timer = GetGameTimer
+  local does_entity_exist = DoesEntityExist
+  return await(function(ent)
+    local time = game_timer()
+    local exists = does_entity_exist(ent)
+    while not exists and not math.timer(time, 5000) do
+      Wait(250)
+      time, exists = game_timer(), does_entity_exist(ent)
+    end
+    return exists
+  end, entity)
 end
 
 ---@param ped integer
@@ -546,38 +565,49 @@ local function init_ped(ped)
 end
 
 ---@param ped integer
----@param scenario_data {scenario: string, coords: vector3, heading: number, chair: string|number?}
+---@param scenario_data {coords: vector4, scenario: string, chair: string|number?}
 local function setup_ped_scenario(ped, scenario_data)
+  local coords = scenario_data.coords
+  local scenario = scenario_data.scenario
   if scenario_data.chair then
-    local chair = GetClosestObjectOfType(scenario_data.coords.x, scenario_data.coords.y, scenario_data.coords.z, 1.0, scenario_data.chair, false, false, false)
+    local chair = GetClosestObjectOfType(coords.x, coords.y, coords.z, 1.0, scenario_data.chair, false, false, false)
     ---@diagnostic disable-next-line: redundant-parameter
-    if DoesEntityExist(chair) then AttachEntityToEntity(chair, ped, GetPedBoneIndex(ped, 0xE0FD), 0.0, 0.0, 0.5, 0.0, 0.0, scenario_data.heading, true, true, false, true, 2, true, false) end
+    if DoesEntityExist(chair) then AttachEntityToEntity(chair, ped, GetPedBoneIndex(ped, 0xE0FD), 0.0, 0.0, 0.5, 0.0, 0.0, coords.w, true, true, false, true, 2, true, false) end
     ProcessEntityAttachments(ped)
   end
-  TaskStartScenarioInPlace(ped, scenario_data.scenario, 0, true)
+  TaskStartScenarioInPlace(ped, scenario, 0, true)
 end
 
--------------------------------- HANDLERS --------------------------------
-AddEventHandler('onResourceStart', init_script)
-AddEventHandler('onResourceStop', deinit_script)
+---@param location integer
+---@return boolean? is_using
+local function is_any_player_using_warehouse(location)
+  location = location or GetClosestWarehouse()
+  if not LOCATIONS[location] then return end
+  return GlobalState['forklift:'..location] ~= nil
+end
 
-AddStateBagChangeHandler('forklift', '', function(name, key, value, _, replicated)
-  if not value or replicated then return end
+---@param name string
+---@param key string
+---@param value any
+---@param replicated boolean
+local function catch_ped_state(name, key, value, _, replicated)
+  if not value then return end
   local entity = GetEntityFromStateBagName(name)
-  if entity == 0 then return end
-  print(key, json.encode(value), entity)
+  if entity == 0 or not catch_entity(entity) then return end
   local wh_key = value['wh_key']
   local wh_type = value['type']
-  local is_start = wh_type == 'Start'
+  local is_start = wh_type == 'sign_up'
+  local ped_key = is_start and 1 or 2
   init_ped(entity)
-  setup_ped_scenario(entity, LOCATIONS[wh_key][wh_type])
+  setup_ped_scenario(entity, LOCATIONS[wh_key]['Peds'][ped_key])
+  print('Ped created for '..wh_key..' '..wh_type)
   Warehouses[wh_key][wh_type] = Warehouses[wh_key][wh_type] or {}
   Warehouses[wh_key][wh_type].target = true and bridge.addlocalentity(entity, {
     {
       name = 'forklift_'..wh_type:lower()..'_target_'..wh_key,
       label = is_start and 'Take Order' or 'Take Forklift',
       icon = is_start and 'fas fa-truck-fast' or 'fas fa-warehouse',
-      action = function()
+      onSelect = function()
         if is_start then
           TriggerEvent('don-forklift:client:StartJob', wh_key)
         else
@@ -586,9 +616,9 @@ AddStateBagChangeHandler('forklift', '', function(name, key, value, _, replicate
       end,
       canInteract = function()
         if is_start then
-          return not LOCATIONS[wh_key].inUse and not jobFinished
+          return not is_any_player_using_warehouse(wh_key) and not jobFinished
         else
-          return not vehicleOut and LOCATIONS[wh_key].inUse
+          return is_any_player_using_warehouse(wh_key) and not vehicleOut
         end
       end
     },
@@ -596,7 +626,7 @@ AddStateBagChangeHandler('forklift', '', function(name, key, value, _, replicate
       name = 'forklift_'..wh_type:lower()..'_target_cancel_'..wh_key,
       label = is_start and 'Cancel Order' or 'Return Forklift',
       icon = 'fas fa-sign-out-alt',
-      action = function()
+      onSelect = function()
         if is_start then
           TriggerEvent('don-forklift:client:CancelJob', wh_key)
         else
@@ -605,34 +635,38 @@ AddStateBagChangeHandler('forklift', '', function(name, key, value, _, replicate
       end,
       canInteract = function()
         if is_start then
-          return isCurrentUserUsingWarehouse() and not jobFinished
+          return is_player_using_warehouse(wh_key) and not jobFinished
         else
-          return vehicleOut and LOCATIONS[wh_key].inUse
+          return is_any_player_using_warehouse(wh_key) and vehicleOut
         end
       end
     }
   })
-end)
+end
 
--------------------------------- EVENTS --------------------------------
-
-RegisterNetEvent('QBCore:Client:OnPlayerLoaded', init_script)
-
-RegisterNetEvent('QBCore:Client:OnPlayerUnload', function()
-  PlayerData = {}
-  if Config.Blips then
-    for id, warehouse in pairs(Config.Locations) do
-      deleteBlipForCoord(warehouse['Blips'].sprite, warehouse['Start'].coords)
+---@return number, number
+function GetClosestWarehouse()
+  local ped = PlayerPedId()
+  local coords = GetEntityCoords(ped)
+  local clst_pnt, dist = 0, math.huge
+  for i = 1, #LOCATIONS do
+    local location = LOCATIONS[i]
+    local pnt = location.coords
+    local new_dist = #(coords - pnt)
+    if new_dist < dist then
+      clst_pnt, dist = i, new_dist
     end
   end
-  if isCurrentUserUsingWarehouse() then
-    local current = getUsersCurrentWarehouse()
-    if response then cancelled = true end
-    if vehicleOut then lendVehicle(current) end
-    TriggerServerEvent('don-forklift:server:Unreserve', current)
-  end
-  removePeds()
-end)
+  return clst_pnt, dist
+end
+
+-------------------------------- EVENTS --------------------------------
+AddEventHandler('onResourceStart', init_script)
+AddEventHandler('onResourceStop', deinit_script)
+AddStateBagChangeHandler('forklift:init', '', catch_ped_state)
+
+RegisterNetEvent(LOAD_EVENT, init_script)
+RegisterNetEvent(UNLOAD_EVENT, deinit_script)
 
 ---@param JobInfo table
 RegisterNetEvent('QBCore:Client:OnJobUpdate', function(JobInfo)
