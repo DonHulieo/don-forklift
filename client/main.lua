@@ -565,12 +565,12 @@ local function init_ped(ped)
 end
 
 ---@param ped integer
----@param scenario_data {coords: vector4, scenario: string, chair: string|number?}
-local function setup_ped_scenario(ped, scenario_data)
-  local coords = scenario_data.coords
-  local scenario = scenario_data.scenario
-  if scenario_data.chair then
-    local chair = GetClosestObjectOfType(coords.x, coords.y, coords.z, 1.0, scenario_data.chair, false, false, false)
+---@param ped_data {model: string, coords: vector4, scenario: string, chair: string|number?}
+local function setup_ped_scenario(ped, ped_data)
+  local coords = ped_data.coords
+  local scenario = ped_data.scenario
+  if ped_data.chair then
+    local chair = GetClosestObjectOfType(coords.x, coords.y, coords.z, 1.0, ped_data.chair, false, false, false)
     ---@diagnostic disable-next-line: redundant-parameter
     if DoesEntityExist(chair) then AttachEntityToEntity(chair, ped, GetPedBoneIndex(ped, 0xE0FD), 0.0, 0.0, 0.5, 0.0, 0.0, coords.w, true, true, false, true, 2, true, false) end
     ProcessEntityAttachments(ped)

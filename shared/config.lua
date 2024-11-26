@@ -12,11 +12,12 @@ return {
   },
   ---@type string
   ['FuelSystem'] = 'ps-fuel',
-  ---@type {name: string, coords: vector4, blip: {enabled: boolean, options: blip_options}, Peds: {model: string, coords: vector4, scenario: string}[], Garage: {model: string, coords: vector4}, Pickup: {vehicle: string, driver: string, coords: vector4[]}, Pallets: {coords: vector4[], models: string[]}}
+  ---@type {name: string, coords: vector4, job: string|boolean?, blip: {enabled: boolean, options: blip_options}, Peds: {model: string, coords: vector4, scenario: string, chair: string|number?}[], Garage: {model: string, coords: vector4}, Pickup: {vehicle: string, driver: string, coords: vector4[]}, Pallets: {coords: vector4[], models: string[]}}[]
   ['Locations'] = {
     {
       name = 'Walker Logistics',
       coords = vector3(153.81, -3214.6, 4.93),
+      job = false,
       blip = {
         enabled = true,
         options = {
