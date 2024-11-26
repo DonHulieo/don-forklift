@@ -25,7 +25,7 @@ end
 local function create_ped(model, coords, key, ped_type)
 	local ped = CreatePed(4, model, coords.x, coords.y, coords.z, coords.w, true, true)
 	SetPedRandomComponentVariation(ped, 0)
-	Entity(ped).state['forklift:init'] = {spawn = true, wh_key = key, type = ped_type}
+	Entity(ped).state['forklift:ped:init'] = {spawn = true, wh_key = key, type = ped_type}
 	return ped
 end
 
@@ -49,9 +49,8 @@ end
 ---@param resource string?
 local function deinit_script(resource)
 	if resource and type(resource) == 'string' and resource ~= RES_NAME then return end
-	for i = 1, #Warehouses.peds do
-		DeleteEntity(Warehouses.peds[i])
-	end
+	for i = 1, #LOCATIONS do GlobalState:set('forklift:warehouse:'..i, nil, true) end
+	for i = 1, #Warehouses.peds do DeleteEntity(Warehouses.peds[i]) end
 end
 
 ---@param warehouse integer
@@ -61,16 +60,66 @@ local function reserve_warehouse(warehouse, identifier, reserve)
 	if not LOCATIONS[warehouse] then return end
 	local src = source
 	if identifier ~= bridge.getidentifier(src) then return end
-	GlobalState:set('forklift:'..warehouse, reserve and identifier or nil, true)
-	if not reserve then GlobalState:set('forklift:'..warehouse..':last', identifier, true) end
+	GlobalState:set('forklift:warehouse:'..warehouse, reserve and identifier or nil, true)
+	if not reserve then GlobalState:set('forklift:warehouse:'..warehouse..':last', identifier, true) end
 	debug_print((reserve and 'Reserved' or 'Unreserved')..' warehouse '..warehouse..' for '..bridge.getplayername(src)..' ('..identifier..')')
 end
 
--------------------------------- HANDLERS --------------------------------
-AddEventHandler('onResourceStart', init_script)
-AddEventHandler('onResourceStop', deinit_script)
+---@param location integer
+---@return boolean?, integer?
+local function is_player_using_warehouse(location, identifier)
+  location = location or GetClosestWarehouse(source)
+  if not LOCATIONS[location] then return end
+  return GlobalState['forklift:warehouse:'..location] == identifier
+end
+
+---@param player string|integer
+---@param model string
+---@param coords vector3
+---@return integer? object
+local function create_object_cb(player, model, coords)
+  if not bridge.getplayer(player) then return end
+	if not is_player_using_warehouse(GetClosestWarehouse(player), bridge.getidentifier(player)) then return end -- Possible exploit banning
+	model = type(model) == 'string' and joaat(model) & 0xFFFFFFFF or model
+  local obj = CreateObjectNoOffset(model, coords.x, coords.y, coords.z, true, false, false)
+  repeat Wait(100) until DoesEntityExist(obj)
+  Entity(obj).state:set('forklift:object:init', true, true)
+  SetEntityIgnoreRequestControlFilter(obj, true)
+  return NetworkGetNetworkIdFromEntity(obj)
+end
+
+---@param player string|integer?
+---@return number, number
+function GetClosestWarehouse(player)
+  local coords = GetEntityCoords(GetPlayerPed(player or source))
+  local clst_pnt, dist = 0, math.huge
+  for i = 1, #LOCATIONS do
+    local location = LOCATIONS[i]
+    local pnt = location.coords
+    local new_dist = #(coords - pnt)
+    if new_dist < dist then
+      clst_pnt, dist = i, new_dist
+    end
+  end
+  return clst_pnt, dist
+end
 
 -------------------------------- EVENTS --------------------------------
+AddEventHandler('onResourceStart', init_script)
+AddEventHandler('onResourceStop', deinit_script)
+---@param name string
+---@param key string
+---@param value any
+---@param replicated boolean
+AddStateBagChangeHandler('forklift:object:fin', '', function(name, key, value, _, replicated)
+  local obj = GetEntityFromStateBagName(name)
+  if not obj or obj == 0 or not DoesEntityExist(obj) then return end
+  DeleteEntity(obj)
+end)
+
+RegisterServerEvent('forklift:server:ReserveWarehouse', reserve_warehouse)
+-------------------------------- CALLBACKS --------------------------------
+bridge.createcallback('forklift:server:CreateObject', create_object_cb)
 
 RegisterNetEvent('QBCore:Server:UpdateObject', function()
 	if source ~= '' then return false end
