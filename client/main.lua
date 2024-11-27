@@ -4,6 +4,11 @@ local await, blips, bridge, math, require, streaming = duff.await, duff.blips, d
 ---@module 'don-forklift.shared.config'
 local config = require 'shared.config'
 local DEBUG_MODE <const> = config.DebugMode
+local MARKER <const> = config.Marker
+local MARKER_ENABLED <const> = MARKER.enabled
+local MARKER_TYPE <const> = MARKER.type
+local MARKER_COLOUR <const> = MARKER.colour
+local MARKER_SCALE <const> = MARKER.scale
 local FUEL_SYSTEM <const> = config.FuelSystem
 local LOCATIONS <const> = config.Locations
 local NOTIFY = config.Notify
@@ -570,6 +575,31 @@ local PALLET_BLIP <const> = {
   distance = 250.0,
 }
 
+---@param entity integer The entity ID of the vehicle or traffic light.
+local function draw_marker(entity)
+  if not MARKER_ENABLED then return end
+  if not DoesEntityExist(entity) then return end
+  local ped = PlayerPedId()
+  local coords = GetEntityCoords(entity)
+  local ply_coords = GetEntityCoords(ped)
+  local dist = #(coords - ply_coords)
+  CreateThread(function()
+    local sleep = 0
+    while DoesEntityExist(entity) do
+      Wait(sleep)
+      coords, ply_coords = GetEntityCoords(entity), GetEntityCoords(ped)
+      dist = #(coords - ply_coords)
+      if dist <= 15.0 then
+        sleep = 0
+        ---@diagnostic disable-next-line: param-type-mismatch
+        DrawMarker(MARKER_TYPE, coords.x, coords.y, coords.z + 2.5, 0, 0, 0, 0, 0, 0, 1.0, 1.0, 1.0, MARKER_COLOUR.r, MARKER_COLOUR.g, MARKER_COLOUR.b, MARKER_COLOUR.a, true, true, 2, false, nil, nil, false)
+      else
+        sleep = 1000
+      end
+    end
+  end)
+end
+
 ---@param obj integer
 ---@param initiate boolean
 ---@param cancelled boolean
@@ -588,6 +618,7 @@ local function setup_mission_obj(obj, initiate, cancelled, sync_state)
     warehouse.blips.objs = warehouse.blips.objs or {}
     warehouse.blips.objs[#warehouse.blips.objs + 1] = iblips:initblip('coord', {coords = coords}, PALLET_BLIP)
     SetModelAsNoLongerNeeded(model)
+    draw_marker(obj)
   else
     local ent = Entity(obj)
     if sync_state then ent.state:set('forklift:object:fin', true, true) end
