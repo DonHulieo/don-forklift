@@ -7,6 +7,7 @@ local LOCATIONS <const> = config.Locations
 
 local QBCore = exports['qb-core']:GetCoreObject()
 local RES_NAME <const> = GetCurrentResourceName()
+---@type {peds: integer[], objs: integer[], vehs: integer[]}
 local Warehouses = {}
 
 -------------------------------- FUNCTIONS --------------------------------
@@ -32,16 +33,16 @@ end
 ---@param resource string?
 local function init_script(resource)
 	if resource and type(resource) == 'string' and resource ~= RES_NAME then return end
-	Warehouses.peds = {}
-	local wh_peds = Warehouses.peds
 	for i = 1, #LOCATIONS do
 		local location = LOCATIONS[i]
 		local peds = location['Peds']
 		Warehouses[i] = Warehouses[i] or {}
+		local warehouse = Warehouses[i]
+		warehouse.peds = {}
 		for j = 1, #peds do
 			local ped_data = peds[j]
 			---@diagnostic disable-next-line: param-type-mismatch
-			wh_peds[#wh_peds + 1] = create_ped(ped_data.model, ped_data.coords, i, j == 1 and 'sign_up' or 'garage')
+			warehouse.peds[#warehouse.peds + 1] = create_ped(ped_data.model, ped_data.coords, i, j == 1 and 'sign_up' or 'garage')
 		end
 	end
 end
@@ -49,8 +50,27 @@ end
 ---@param resource string?
 local function deinit_script(resource)
 	if resource and type(resource) == 'string' and resource ~= RES_NAME then return end
-	for i = 1, #LOCATIONS do GlobalState:set('forklift:warehouse:'..i, nil, true) end
-	for i = 1, #Warehouses.peds do DeleteEntity(Warehouses.peds[i]) end
+	for i = 1, #LOCATIONS do
+		local warehouse = Warehouses[i]
+		for j = 1, #warehouse.peds do
+			local ped = warehouse.peds[j]
+			if DoesEntityExist(ped) then DeleteEntity(ped) end
+		end
+		if warehouse.objs then
+			for j = 1, #warehouse.objs do
+				local obj = warehouse.objs[j]
+				if DoesEntityExist(obj) then DeleteEntity(obj) end
+			end
+		end
+		if warehouse.vehs then
+			for j = 1, #warehouse.vehs do
+				local veh = warehouse.vehs[j]
+				if DoesEntityExist(veh) then DeleteEntity(veh) end
+			end
+		end
+		GlobalState:set('forklift:warehouse:'..i, nil, true)
+		GlobalState:set('forklift:warehouse:'..i..':last', nil, true)
+	end
 end
 
 ---@param warehouse integer
@@ -68,9 +88,15 @@ end
 ---@param location integer
 ---@return boolean?, integer?
 local function is_player_using_warehouse(location, identifier)
-  location = location or GetClosestWarehouse(source)
+  location = location or GetClosestWarehouse(GetPlayerPed(source))
   if not LOCATIONS[location] then return end
   return GlobalState['forklift:warehouse:'..location] == identifier
+end
+
+---@param model string|integer
+---@return integer hash
+local function hash_model(model)
+	return type(model) == 'string' and joaat(model) & 0xFFFFFFFF or model --[[@as integer]]
 end
 
 ---@param player string|integer
@@ -80,20 +106,69 @@ end
 ---@return integer? object
 local function create_object_cb(player, model, coords, location)
   if not bridge.getplayer(player) then return end
-	if not is_player_using_warehouse(GetClosestWarehouse(player), bridge.getidentifier(player)) then return end -- Possible exploit banning
-	model = type(model) == 'string' and joaat(model) & 0xFFFFFFFF or model
-  local obj = CreateObjectNoOffset(model, coords.x, coords.y, coords.z, true, false, false)
+	if not is_player_using_warehouse(GetClosestWarehouse(GetPlayerPed(player)), bridge.getidentifier(player)) then return end -- Possible exploit banning
+  local obj = CreateObjectNoOffset(hash_model(model), coords.x, coords.y, coords.z, true, false, false)
   repeat Wait(100) until DoesEntityExist(obj)
+	local ent = Entity(obj)
   Entity(obj).state:set('forklift:object:init', true, true)
+	Entity(obj).state:set('forklift:object:owner', player, true)
 	Entity(obj).state:set('forklift:object:warehouse', location, true)
   SetEntityIgnoreRequestControlFilter(obj, true)
+	Warehouses[location].objs = Warehouses[location].objs or {}
+	Warehouses[location].objs[#Warehouses[location].objs + 1] = obj
   return NetworkGetNetworkIdFromEntity(obj)
 end
 
----@param player string|integer?
+---@param model string|integer
+---@return string vehicle_type
+local function get_vehicle_type(model) -- Credits go to: [QBox](https://github.com/Qbox-project/qbx_core/blob/82cf765b80095293b2d6908be0576f1433a38ee8/modules/lib.lua#L268)
+	local temp = CreateVehicle(hash_model(model), 0, 0, -200, 0, true, true)
+	repeat Wait(0) until DoesEntityExist(temp)
+	local veh_type = GetVehicleType(temp)
+	DeleteEntity(temp)
+	return veh_type
+end
+
+---@param player string|integer
+---@param model string|integer
+---@param coords vector3|vector4
+---@param location integer
+---@return integer? netID
+local function create_vehicle_cb(player, model, coords, location)
+	if not bridge.getplayer(player) then return end
+	if not is_player_using_warehouse(GetClosestWarehouse(GetPlayerPed(player)), bridge.getidentifier(player)) then return end -- Possible exploit banning
+	local veh_type = get_vehicle_type(model)
+	local veh = CreateVehicleServerSetter(model, veh_type, coords.x, coords.y, coords.z, coords.w or 0)
+  repeat Wait(0) until DoesEntityExist(veh)
+	Entity(veh).state:set('forklift:vehicle:init', true, true)
+	Entity(veh).state:set('forklift:vehicle:owner', player, true)
+	Entity(veh).state:set('forklift:vehicle:warehouse', location, true)
+	SetEntityIgnoreRequestControlFilter(veh, true)
+	Warehouses[location].vehs = Warehouses[location].vehs or {}
+	Warehouses[location].vehs[#Warehouses[location].vehs + 1] = veh
+	return NetworkGetNetworkIdFromEntity(veh)
+end
+
+---@param location integer
+---@param entity integer
+local function remove_entity(location, entity)
+	local src = source
+	local entity = NetworkGetEntityFromNetworkId(entity)
+	if not LOCATIONS[location] then return end
+	if not DoesEntityExist(entity) then return end
+	if not is_player_using_warehouse(GetClosestWarehouse(GetPlayerPed(src)), bridge.getidentifier(src)) then return end -- Possible exploit banning
+	local ent_type = GetEntityType(entity)
+	local entites = Warehouses[location][ent_type == 1 and 'peds' or ent_type == 2 and 'vehs' or 'objs'] --[[@as integer[]=]]
+	DeleteEntity(entity)
+	for i = #entites, 1, -1 do
+		if entites[i] == entity then table.remove(entites, i) break end
+	end
+end
+
+---@param entity integer
 ---@return number, number
-function GetClosestWarehouse(player)
-  local coords = GetEntityCoords(GetPlayerPed(player or source))
+function GetClosestWarehouse(entity)
+  local coords = GetEntityCoords(entity)
   local clst_pnt, dist = 0, math.huge
   for i = 1, #LOCATIONS do
     local location = LOCATIONS[i]
@@ -120,8 +195,10 @@ AddStateBagChangeHandler('forklift:object:fin', '', function(name, key, value, _
 end)
 
 RegisterServerEvent('forklift:server:ReserveWarehouse', reserve_warehouse)
+RegisterServerEvent('forklift:server:RemoveEntity', remove_entity)
 -------------------------------- CALLBACKS --------------------------------
 bridge.createcallback('forklift:server:CreateObject', create_object_cb)
+bridge.createcallback('forklift:server:CreateVehicle', create_vehicle_cb)
 
 RegisterNetEvent('QBCore:Server:UpdateObject', function()
 	if source ~= '' then return false end
