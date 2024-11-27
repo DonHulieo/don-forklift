@@ -3,11 +3,11 @@ local duff = duff
 return {
   ---@type boolean
   ['DebugMode'] = false,
-  ---@type {enabled: boolean, type: integer, color: {r: integer, g: integer, b: integer, a: integer}|vector4, scale: {x: number, y: number, z: number}|vector3}
-  ['PalletMarker'] = {
+  ---@type {enabled: boolean, type: integer, colour: {r: integer, g: integer, b: integer, a: integer}|vector4, scale: {x: number, y: number, z: number}|vector3}
+  ['Marker'] = {
     enabled = true,
     type = 0,
-    color = {r = 240, g = 160, b = 1, a = 255},
+    colour = {r = 240, g = 160, b = 1, a = 255},
     scale = {x = 1.0, y = 1.0, z = 1.0}
   },
   ---@type string
@@ -44,7 +44,7 @@ return {
           scenario = 'WORLD_HUMAN_CLIPBOARD'
         }, { -- Garage
           model = `s_m_y_dockwork_01`,
-          coords = vector4(120.89, -3184.05, 4.99, 91.27),
+          coords = vector4(120.89, -3184.05, 4.99, 271.27),
           scenario = 'WORLD_HUMAN_AA_COFFEE'
         }
       },
