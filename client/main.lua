@@ -562,7 +562,7 @@ local function deinit_script(resource)
     if response then cancelled = true end
     if vehicleOut and i then lendVehicle(i) end
     if warehouse.pallet then remove_mission_obj(i, true) end
-    if warehouse.garage?.blip then iblips:remove(warehouse.garage.blip) end
+    if warehouse.garage then iblips:remove(warehouse.garage.blip); table.wipe(warehouse.garage) end
     if is_player_using_warehouse(i) then TriggerServerEvent('forklift:server:ReserveWarehouse', location, bridge.getidentifier(), false) end
     table.wipe(warehouse)
   end
@@ -768,6 +768,8 @@ local function setup_order(location, initiate, canceled)
     if canceled then
       NOTIFY(nil, 'Order canceled...', 'error')
       remove_mission_obj(location, true)
+      iblips:remove(Warehouses[location].garage.blip)
+      table.wipe(Warehouses[location].garage)
     end
   end
 end
