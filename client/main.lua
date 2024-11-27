@@ -526,19 +526,30 @@ local function is_player_using_warehouse(location)
   return GlobalState['forklift:warehouse:'..location] == identifier
 end
 
+---@param location integer
+---@param sync_state boolean?
+local function remove_mission_obj(location, sync_state)
+  local warehouse = Warehouses[location]
+  if not warehouse then return end
+  if warehouse.pallet then
+    if sync_state then Entity(warehouse.pallet.obj).state:set('forklift:object:fin', true, true) end
+    iblips:remove(warehouse.pallet.blip)
+    table.wipe(warehouse.pallet)
+  end
+end
+
 ---@param resource string? Stopping resource name or nil.
 local function deinit_script(resource)
   if resource and type(resource) == 'string' and resource ~= RES_NAME then return end
   for i = 1, #LOCATIONS do
     local location = LOCATIONS[i]
     local warehouse = Warehouses[i]
-    if location.blip.enabled then blips.remove(warehouse.blip) end
-    if is_player_using_warehouse(i) then
-      if response then cancelled = true end
-      if vehicleOut and i then lendVehicle(i) end
-      if warehouse.pallet then Entity(warehouse.pallet.obj).state:set('forklift:object:fin', true, true) end
-      TriggerServerEvent('forklift:server:ReserveWarehouse', location, bridge.getidentifier(), false)
-    end
+    if location.blip.enabled then iblips:remove(warehouse.blip) end
+    if response then cancelled = true end
+    if vehicleOut and i then lendVehicle(i) end
+    if warehouse.pallet then remove_mission_obj(i, true) end
+    if warehouse.garage?.blip then iblips:remove(warehouse.garage.blip) end
+    if is_player_using_warehouse(i) then TriggerServerEvent('forklift:server:ReserveWarehouse', location, bridge.getidentifier(), false) end
     table.wipe(warehouse)
   end
   removePeds()
@@ -660,6 +671,19 @@ local function does_warehouse_require_job(location)
   return warehouse.job and warehouse.job
 end
 
+---@param model string|integer
+---@param coords vector4
+---@param location integer
+---@return integer netID
+local function create_object(model, coords, location)
+  Wait(0)
+  local p = promise.new()
+  bridge.triggercallback(nil, 'forklift:server:CreateObject', function(netID)
+    p:resolve(netID)
+  end, model, coords, location)
+  return cit_await(p)
+end
+
 ---@param location integer
 ---@param initiate boolean
 ---@param canceled boolean
@@ -685,8 +709,9 @@ local function setup_order(location, initiate, canceled)
     if not Warehouses[location].pallet then Warehouses[location].pallet = {} end
     Warehouses[location].pallet.mod = mdl
     Warehouses[location].pallet.coords = pnt
-    Warehouses[location].pallet.obj = bridge.triggercallback(nil, 'forklift:server:CreateObject', function(_) end, mdl, pnt)
-    Warehouses[location].pallet.blip = iblips:initblip('coord', {coords = Warehouses[location].pallet.coords}, {
+    local pallet = NetToObj(create_object(mdl, pnt, location))
+    Warehouses[location].pallet.obj = pallet
+    Warehouses[location].pallet.blip = iblips:initblip('coord', {coords = pnt}, {
       name = 'Pallet',
       colours = {
         opacity = 255,
@@ -703,15 +728,32 @@ local function setup_order(location, initiate, canceled)
       },
       distance = 250.0,
     })
-    Entity(Warehouses[location].pallet.obj).state:set('forklift:object:warehouse', location, true)
-    SetModelAsNoLongerNeeded(Warehouses[location].pallet.mod)
+    SetModelAsNoLongerNeeded(mdl)
+    if not Warehouses[location].garage then Warehouses[location].garage = {} end
+    Warehouses[location].garage.blip = iblips:initblip('coord', {coords = warehouse.Garage.coords.xyz}, {
+      name = 'Forklift',
+      colours = {
+        opacity = 255,
+        primary = 28
+      },
+      display = {
+        category = 'mission',
+        display = 'all_select'
+      },
+      style = {
+        sprite = 357,
+        scale = 0.6,
+        short_range = true
+      },
+      distance = 250.0,
+    })
     NOTIFY(nil, 'Delivery is marked...', 'success', 2500)
     Wait(1000)
     ClearPedTasks(ped)
   else
     if canceled then
       NOTIFY(nil, 'Order canceled...', 'error')
-      Entity(Warehouses[location].pallet.obj).state:set('forklift:object:fin', true, true)
+      remove_mission_obj(location, true)
     end
   end
 end
@@ -735,11 +777,9 @@ local function sync_object_state_bag(name, key, value, _, replicated)
     SetEntityDynamic(obj, true)
     SetEntityCollision(obj, true, true)
   elseif key == 'forklift:object:fin' then
-    local location = value
-    local warehouse = Warehouses[location]
+    -- local location = value
     -- DeleteObject(obj)
-    iblips:remove(warehouse.pallet.blip)
-    table.wipe(warehouse.pallet)
+    -- remove_mission_obj(location, false)
   end
 end
 

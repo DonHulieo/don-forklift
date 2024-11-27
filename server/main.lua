@@ -76,14 +76,16 @@ end
 ---@param player string|integer
 ---@param model string
 ---@param coords vector3
+---@param location integer
 ---@return integer? object
-local function create_object_cb(player, model, coords)
+local function create_object_cb(player, model, coords, location)
   if not bridge.getplayer(player) then return end
 	if not is_player_using_warehouse(GetClosestWarehouse(player), bridge.getidentifier(player)) then return end -- Possible exploit banning
 	model = type(model) == 'string' and joaat(model) & 0xFFFFFFFF or model
   local obj = CreateObjectNoOffset(model, coords.x, coords.y, coords.z, true, false, false)
   repeat Wait(100) until DoesEntityExist(obj)
   Entity(obj).state:set('forklift:object:init', true, true)
+	Entity(obj).state:set('forklift:object:warehouse', location, true)
   SetEntityIgnoreRequestControlFilter(obj, true)
   return NetworkGetNetworkIdFromEntity(obj)
 end
