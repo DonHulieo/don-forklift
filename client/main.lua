@@ -6,7 +6,7 @@ local config = require 'shared.config'
 local DEBUG_MODE <const> = config.DebugMode
 local LOCATIONS <const> = config.Locations
 local NOTIFY = config.Notify
-local LOAD_EVENT <const>, UNLOAD_EVENT <const> = bridge['_DATA']['EVENTS'].LOAD, bridge['_DATA']['EVENTS'].UNLOAD
+local LOAD_EVENT <const>, UNLOAD_EVENT <const>, JOB_EVENT <const> = bridge['_DATA']['EVENTS'].LOAD, bridge['_DATA']['EVENTS'].UNLOAD, bridge['_DATA']['EVENTS'].JOBDATA
 local RES_NAME <const> = GetCurrentResourceName()
 local entered_thread, entered_warehouse, isLoggedIn = false, false, false
 local cit_await = Citizen.Await
@@ -504,16 +504,30 @@ local function listen4Load(ped, veh)
   end)
 end
 
----@param resource string? Starting resource name or nil.
-local function init_script(resource)
-  if resource and type(resource) == 'string' and resource ~= RES_NAME then return end
+---@return table warehouses
+local function init_warehouses()
   for i = 1, #LOCATIONS do
     local location = LOCATIONS[i]
     local coords = location.coords
     local blip_data = location.blip
     Warehouses[i] = Warehouses[i] or {}
-    Warehouses[i].blip = blip_data.enabled and iblips:initblip('coord', {coords = coords}, blip_data.options)
+    if blip_data.enabled then
+      local has_job = not location.job or location.job and bridge.doesplayerhavegroup(nil, location.job --[[@as string|string[]=]])
+      if not Warehouses[i].blip and has_job then
+        Warehouses[i].blip = iblips:initblip('coord', {coords = coords}, blip_data.options)
+      else
+        iblips:remove(Warehouses[i].blip)
+        Warehouses[i].blip = nil
+      end
+    end
   end
+  return Warehouses
+end
+
+---@param resource string? Starting resource name or nil.
+local function init_script(resource)
+  if resource and type(resource) == 'string' and resource ~= RES_NAME then return end
+  init_warehouses()
   isLoggedIn = LocalPlayer.state.isLoggedIn or IsPlayerPlaying(PlayerId())
 end
 
@@ -783,6 +797,10 @@ local function sync_object_state_bag(name, key, value, _, replicated)
   end
 end
 
+local function on_job_update()
+  init_warehouses()
+end
+
 ---@return number, number
 function GetClosestWarehouse()
   local ped = PlayerPedId()
@@ -808,30 +826,7 @@ AddStateBagChangeHandler('', '', sync_object_state_bag)
 
 RegisterNetEvent(LOAD_EVENT, init_script)
 RegisterNetEvent(UNLOAD_EVENT, deinit_script)
-
----@param JobInfo table
-RegisterNetEvent('QBCore:Client:OnJobUpdate', function(JobInfo)
-  for id, warehouse in pairs(Config.Locations) do
-    if Config.RequiresJob then
-      local function getK()
-        for k in pairs(Config.Job) do return k end
-      end
-      local tableName = getK()
-      if JobInfo.name == tableName then
-        PlayerData.job = JobInfo 
-        if Config.Blips then 
-          createBlip(warehouse['Start'].coords, warehouse['Blips'].label, warehouse['Blips'].sprite, warehouse['Blips'].color, warehouse['Blips'].scale)
-        end
-      else
-        deleteBlipForCoord(warehouse['Blips'].sprite, warehouse['Start'].coords)
-      end
-    else
-      if Config.Blips then 
-        createBlip(warehouse['Start'].coords, warehouse['Blips'].label, warehouse['Blips'].sprite, warehouse['Blips'].color, warehouse['Blips'].scale)
-      end
-    end
-  end
-end)
+RegisterNetEvent(JOB_EVENT, on_job_update)
 
 ---@param location number
 RegisterNetEvent('don-forklift:client:StartJob', function(location)
