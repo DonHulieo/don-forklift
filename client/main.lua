@@ -698,6 +698,42 @@ local function create_object(model, coords, location)
   return cit_await(p)
 end
 
+local PALLET_BLIP <const> = {
+  name = 'Pallet',
+  colours = {
+    opacity = 255,
+    primary = 70
+  },
+  display = {
+    category = 'mission',
+    display = 'radar_only'
+  },
+  style = {
+    sprite = 478,
+    scale = 0.8,
+    short_range = true
+  },
+  distance = 250.0,
+}
+
+local GARAGE_BLIP <const> = {
+  name = 'Forklift',
+  colours = {
+    opacity = 255,
+    primary = 28
+  },
+  display = {
+    category = 'mission',
+    display = 'all_select'
+  },
+  style = {
+    sprite = 357,
+    scale = 0.6,
+    short_range = true
+  },
+  distance = 250.0,
+}
+
 ---@param location integer
 ---@param initiate boolean
 ---@param canceled boolean
@@ -725,42 +761,10 @@ local function setup_order(location, initiate, canceled)
     Warehouses[location].pallet.coords = pnt
     local pallet = NetToObj(create_object(mdl, pnt, location))
     Warehouses[location].pallet.obj = pallet
-    Warehouses[location].pallet.blip = iblips:initblip('coord', {coords = pnt}, {
-      name = 'Pallet',
-      colours = {
-        opacity = 255,
-        primary = 70
-      },
-      display = {
-        category = 'mission',
-        display = 'radar_only'
-      },
-      style = {
-        sprite = 478,
-        scale = 0.8,
-        short_range = true
-      },
-      distance = 250.0,
-    })
+    Warehouses[location].pallet.blip = iblips:initblip('coord', {coords = pnt}, PALLET_BLIP)
     SetModelAsNoLongerNeeded(mdl)
     if not Warehouses[location].garage then Warehouses[location].garage = {} end
-    Warehouses[location].garage.blip = iblips:initblip('coord', {coords = warehouse.Garage.coords.xyz}, {
-      name = 'Forklift',
-      colours = {
-        opacity = 255,
-        primary = 28
-      },
-      display = {
-        category = 'mission',
-        display = 'all_select'
-      },
-      style = {
-        sprite = 357,
-        scale = 0.6,
-        short_range = true
-      },
-      distance = 250.0,
-    })
+    Warehouses[location].garage.blip = iblips:initblip('coord', {coords = warehouse.Garage.coords.xyz}, GARAGE_BLIP)
     NOTIFY(nil, 'Delivery is marked...', 'success', 2500)
     Wait(1000)
     ClearPedTasks(ped)
@@ -799,10 +803,6 @@ local function sync_object_state_bag(name, key, value, _, replicated)
   end
 end
 
-local function on_job_update()
-  init_warehouses()
-end
-
 ---@return number, number
 function GetClosestWarehouse()
   local ped = PlayerPedId()
@@ -828,7 +828,7 @@ AddStateBagChangeHandler('', '', sync_object_state_bag)
 
 RegisterNetEvent(LOAD_EVENT, init_script)
 RegisterNetEvent(UNLOAD_EVENT, deinit_script)
-RegisterNetEvent(JOB_EVENT, on_job_update)
+RegisterNetEvent(JOB_EVENT, init_warehouses)
 
 ---@param location number
 RegisterNetEvent('don-forklift:client:StartJob', function(location)
