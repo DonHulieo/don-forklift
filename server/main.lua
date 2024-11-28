@@ -98,6 +98,7 @@ local function create_timer(location, identifier)
 		local limit = PAY[location].time_limit
 		warehouse[identifier] = GetGameTimer()
 		repeat Wait(1000) until not warehouse[identifier] or not is_player_using_warehouse(location, identifier) or GetGameTimer() - warehouse[identifier] >= limit
+		TriggerClientEvent('forklift:client:SetupOrder', src, location, false, true)
 	end)
 end
 
