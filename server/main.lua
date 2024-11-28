@@ -141,32 +141,37 @@ local function create_vehicle_cb(player, model, coords, location, driver)
 	local veh_type = get_vehicle_type(model)
 	local veh = CreateVehicleServerSetter(model, veh_type, coords.x, coords.y, coords.z, coords.w or 0)
   repeat Wait(0) until DoesEntityExist(veh)
-	Entity(veh).state:set('forklift:vehicle:init', true, true)
-	Entity(veh).state:set('forklift:vehicle:owner', player, true)
-	Entity(veh).state:set('forklift:vehicle:warehouse', location, true)
+	local veh_state = Entity(veh).state
+	veh_state:set('forklift:vehicle:init', true, true)
+	veh_state:set('forklift:vehicle:owner', player, true)
+	veh_state:set('forklift:vehicle:warehouse', location, true)
 	SetEntityIgnoreRequestControlFilter(veh, true)
 	Warehouses[location].vehs = Warehouses[location].vehs or {}
 	Warehouses[location].vehs[#Warehouses[location].vehs + 1] = veh
 	local netID = NetworkGetNetworkIdFromEntity(veh)
 	local ped = driver and CreatePed(4, model, coords.x, coords.y, coords.z, coords.w, true, true)
+	local ped_netID
 	if ped then
 		repeat Wait(0) until DoesEntityExist(ped)
+		local ped_state = Entity(ped).state
+		ped_netID = NetworkGetNetworkIdFromEntity(ped)
+		ped_state:set('forklift:ped:vehicle', netID, true)
+		ped_state:set('forklift:ped:owner', player, true)
+		ped_state:set('forklift:ped:warehouse', location, true)
+		veh_state:set('forklift:vehicle:driver', ped_netID, true)
 		SetPedRandomComponentVariation(ped, 0)
 		SetVehicleDoorsLocked(veh, 3)
 		SetEntityIgnoreRequestControlFilter(ped, true)
-		Entity(ped).state:set('forklift:ped:vehicle', netID, true)
-		Entity(ped).state:set('forklift:ped:owner', player, true)
-		Entity(ped).state:set('forklift:ped:warehouse', location, true)
 		Warehouses[location].peds[#Warehouses[location].peds + 1] = ped
 	end
-	return netID, ped and NetworkGetNetworkIdFromEntity(ped)
+	return netID, ped and ped_netID
 end
 
 ---@param location integer
----@param entity integer
-local function remove_entity(location, entity)
+---@param netID integer
+local function remove_entity(location, netID)
 	local src = source
-	local entity = NetworkGetEntityFromNetworkId(entity)
+	local entity = NetworkGetEntityFromNetworkId(netID)
 	if not LOCATIONS[location] then return end
 	if not DoesEntityExist(entity) then return end
 	if not is_player_using_warehouse(GetClosestWarehouse(GetPlayerPed(src)), bridge.getidentifier(src)) then return end -- Possible exploit banning
@@ -176,6 +181,7 @@ local function remove_entity(location, entity)
 	for i = #entites, 1, -1 do
 		if entites[i] == entity then table.remove(entites, i) break end
 	end
+	TriggerClientEvent('forklift:client:RemoveEntity', -1, location, netID)
 end
 
 ---@param entity integer
