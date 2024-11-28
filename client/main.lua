@@ -1158,6 +1158,32 @@ local function catch_driver_state(name, key, value, _, replicated)
   Warehouses[location].pickup.blip = iblips:initblip('vehicle', {vehicle = veh}, PICKUP_BLIP)
 end
 
+---@param location integer
+---@param netID integer
+local function remove_entity(location, netID)
+  if not NetworkDoesEntityExistWithNetworkId(netID) then return end
+  local entity = NetToObj(netID)
+  local warehouse = Warehouses[location]
+  if not warehouse then return end
+  for i = 1, #warehouse.objs do
+    if warehouse.objs[i] == entity then
+      table.remove(warehouse.objs, i)
+      iblips:remove(warehouse.blips.objs[i])
+      table.remove(warehouse.blips.objs, i)
+      break
+    end
+  end
+  if warehouse.pallet and warehouse.pallet.obj == entity then
+    iblips:remove(warehouse.pallet.blip)
+    table.wipe(warehouse.pallet)
+  end
+  if warehouse.pickup and warehouse.pickup.veh == entity then
+    iblips:remove(warehouse.pickup.blip)
+    table.wipe(warehouse.pickup)
+  end
+  if DoesEntityExist(entity) then DeleteEntity(entity) end
+end
+
 ---@param entity integer?
 ---@return number, number
 function GetClosestWarehouse(entity)
@@ -1187,28 +1213,7 @@ AddStateBagChangeHandler('forklift:vehicle:driver', '', catch_driver_state)
 RegisterNetEvent(LOAD_EVENT, init_script)
 RegisterNetEvent(UNLOAD_EVENT, deinit_script)
 RegisterNetEvent(JOB_EVENT, init_warehouses)
-RegisterNetEvent('forklift:client:RemoveEntity', function(location, netID)
-  local entity = NetToObj(netID)
-  local warehouse = Warehouses[location]
-  if not warehouse then return end
-  for i = 1, #warehouse.objs do
-    if warehouse.objs[i] == entity then
-      table.remove(warehouse.objs, i)
-      iblips:remove(warehouse.blips.objs[i])
-      table.remove(warehouse.blips.objs, i)
-      break
-    end
-  end
-  if warehouse.pallet and warehouse.pallet.obj == entity then
-    iblips:remove(warehouse.pallet.blip)
-    table.wipe(warehouse.pallet)
-  end
-  if warehouse.pickup and warehouse.pickup.veh == entity then
-    iblips:remove(warehouse.pickup.blip)
-    table.wipe(warehouse.pickup)
-  end
-  if DoesEntityExist(entity) then DeleteEntity(entity) end
-end)
+RegisterNetEvent('forklift:client:RemoveEntity', remove_entity)
 
 ---@param location number
 RegisterNetEvent('don-forklift:client:StartJob', function(location)
