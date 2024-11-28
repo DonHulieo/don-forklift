@@ -15,6 +15,7 @@ local NOTIFY = config.Notify
 local LOAD_EVENT <const>, UNLOAD_EVENT <const>, JOB_EVENT <const> = bridge['_DATA']['EVENTS'].LOAD, bridge['_DATA']['EVENTS'].UNLOAD, bridge['_DATA']['EVENTS'].JOBDATA
 local RES_NAME <const> = GetCurrentResourceName()
 local entered_thread, entered_warehouse, isLoggedIn = false, false, false
+local game_timer = GetGameTimer
 local cit_await = Citizen.Await
 
 local QBCore = exports['qb-core']:GetCoreObject()
@@ -608,7 +609,7 @@ local function setup_mission_obj(obj, initiate, cancelled, sync_state)
   if not DoesEntityExist(obj) then return end
   if initiate then Wait(100) end
   local net_id = ObjToNet(obj)
-  local location = GetStateBagValue('entity:'..ObjToNet(obj), 'forklift:object:warehouse')
+  local location = GetStateBagValue('entity:'..net_id, 'forklift:object:warehouse')
   local warehouse = Warehouses[location]
   local coords = GetEntityCoords(obj)
   local model = GetEntityModel(obj)
@@ -728,7 +729,6 @@ end
 ---@param entity integer
 ---@return boolean
 local function catch_entity(entity)
-  local game_timer = GetGameTimer
   local does_entity_exist = DoesEntityExist
   return await(function(ent)
     local time = game_timer()
@@ -746,13 +746,14 @@ local function catch_entity(entity)
 end
 
 ---@param ped integer
-local function init_ped(ped)
+---@param freeze boolean
+local function init_ped(ped, freeze)
   SetBlockingOfNonTemporaryEvents(ped, true)
   SetEntityInvincible(ped, true)
   SetPedDiesWhenInjured(ped, false)
   SetPedCanPlayAmbientAnims(ped, true)
   SetPedCanRagdollFromPlayerImpact(ped, false)
-  FreezeEntityPosition(ped, true)
+  FreezeEntityPosition(ped, freeze)
 end
 
 ---@param ped integer
@@ -790,7 +791,7 @@ local function catch_ped_state(name, key, value, _, replicated)
   local wh_type = value['type']
   local is_start = wh_type == 'sign_up'
   local ped_key = is_start and 1 or 2
-  init_ped(entity)
+  init_ped(entity, true)
   setup_ped_scenario(entity, LOCATIONS[wh_key]['Peds'][ped_key])
   Warehouses[wh_key] = Warehouses[wh_key] or {}
   Warehouses[wh_key][wh_type] = Warehouses[wh_key][wh_type] or {}
