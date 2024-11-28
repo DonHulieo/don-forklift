@@ -133,8 +133,9 @@ end
 ---@param model string|integer
 ---@param coords vector3|vector4
 ---@param location integer
----@return integer? netID
-local function create_vehicle_cb(player, model, coords, location)
+---@param driver string|integer?
+---@return integer? netID, integer? ped_netID
+local function create_vehicle_cb(player, model, coords, location, driver)
 	if not bridge.getplayer(player) then return end
 	if not is_player_using_warehouse(GetClosestWarehouse(GetPlayerPed(player)), bridge.getidentifier(player)) then return end -- Possible exploit banning
 	local veh_type = get_vehicle_type(model)
@@ -146,7 +147,19 @@ local function create_vehicle_cb(player, model, coords, location)
 	SetEntityIgnoreRequestControlFilter(veh, true)
 	Warehouses[location].vehs = Warehouses[location].vehs or {}
 	Warehouses[location].vehs[#Warehouses[location].vehs + 1] = veh
-	return NetworkGetNetworkIdFromEntity(veh)
+	local netID = NetworkGetNetworkIdFromEntity(veh)
+	local ped = driver and CreatePed(4, model, coords.x, coords.y, coords.z, coords.w, true, true)
+	if ped then
+		repeat Wait(0) until DoesEntityExist(ped)
+		SetPedRandomComponentVariation(ped, 0)
+		SetVehicleDoorsLocked(veh, 3)
+		SetEntityIgnoreRequestControlFilter(ped, true)
+		Entity(ped).state:set('forklift:ped:vehicle', netID, true)
+		Entity(ped).state:set('forklift:ped:owner', player, true)
+		Entity(ped).state:set('forklift:ped:warehouse', location, true)
+		Warehouses[location].peds[#Warehouses[location].peds + 1] = ped
+	end
+	return netID, ped and NetworkGetNetworkIdFromEntity(ped)
 end
 
 ---@param location integer
