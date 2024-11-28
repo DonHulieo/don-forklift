@@ -571,9 +571,9 @@ local PALLET_BLIP <const> = {
   style = {
     sprite = 478,
     scale = 0.8,
-    short_range = true
+    -- short_range = true
   },
-  distance = 250.0,
+  -- distance = 250.0,
 }
 
 ---@param entity integer The entity ID.
@@ -608,22 +608,29 @@ end
 local function setup_mission_obj(obj, initiate, cancelled, sync_state)
   if not DoesEntityExist(obj) then return end
   if initiate then Wait(100) end
-  local net_id = ObjToNet(obj)
-  local location = GetStateBagValue('entity:'..net_id, 'forklift:object:warehouse')
+  local netID = ObjToNet(obj)
+  local location = GetStateBagValue('entity:'..netID, 'forklift:object:warehouse')
   local warehouse = Warehouses[location]
   local coords = GetEntityCoords(obj)
   local model = GetEntityModel(obj)
   if initiate then
+    if not NetworkDoesEntityExistWithNetworkId(netID) then return end
     warehouse.objs = warehouse.objs or {}
     warehouse.objs[#warehouse.objs + 1] = obj
-    warehouse.blips.objs = warehouse.blips.objs or {}
-    warehouse.blips.objs[#warehouse.blips.objs + 1] = iblips:initblip('coord', {coords = coords}, PALLET_BLIP)
     SetModelAsNoLongerNeeded(model)
+    NetworkUseHighPrecisionBlending(netID, true)
+    NetworkSetObjectForceStaticBlend(obj, true)
+    PlaceObjectOnGroundProperly(obj)
+    SetEntityAsMissionEntity(obj, true, true)
+    SetEntityCanBeDamaged(obj, true)
+    SetEntityDynamic(obj, true)
+    warehouse.blips.objs = warehouse.blips.objs or {}
+    warehouse.blips.objs[#warehouse.blips.objs + 1] = iblips:initblip('entity', {entity = obj}, PALLET_BLIP)
     draw_marker(obj)
   else
     local ent = Entity(obj)
     if sync_state then ent.state:set('forklift:object:fin', true, true) end
-    TriggerServerEvent('forklift:server:RemoveEntity', location, net_id)
+    TriggerServerEvent('forklift:server:RemoveEntity', location, netID)
     if cancelled then
       local min, max = GetModelDimensions(model)
       local diff = max - min
@@ -682,9 +689,9 @@ local PICKUP_BLIP <const> = {
   style = {
     sprite = 67,
     scale = 0.8,
-    short_range = true
+    -- short_range = true
   },
-  distance = 250.0,
+  -- distance = 250.0,
 }
 
 ---@param vehicle integer
@@ -702,7 +709,6 @@ local function init_vehicle(vehicle, plate, is_ai)
     N_0x6ebfb22d646ffc18(vehicle, false)
     N_0x182f266c2d9e2beb(vehicle, 250.0)
     SetVehicleHandlingHashForAi(vehicle, -1103972294)
-    iblips:initblip('entity', {entity = vehicle}, PICKUP_BLIP)
   end
 end
 
@@ -736,9 +742,6 @@ local function setup_vehicle(location, initiate)
         repeat Wait(100) until not IsPedInVehicle(ped, veh, false)
       end
       TriggerServerEvent('forklift:server:RemoveEntity', location, VehToNet(veh))
-      SetTimeout(1000, function()
-        if DoesEntityExist(veh) then SetEntityAsMissionEntity(veh, true, true); DeleteEntity(veh) end
-      end)
       NOTIFY(nil, 'Forklift returned to garage...', 'success')
     else
       NOTIFY(nil, 'You have no forklift to return...', 'error')
@@ -746,18 +749,204 @@ local function setup_vehicle(location, initiate)
   end
 end
 
+local function get_owned_pickup(location)
+  location = location or get_warehouse_player_is_using() or GetClosestWarehouse()
+  local warehouse = Warehouses[location]
+  if not warehouse then return end
+  local pickup = warehouse.pickup
+  if not pickup then return end
+  local server_id = GetPlayerServerId(PlayerId())
+  local veh = pickup.veh
+  if veh and DoesEntityExist(veh) and Entity(veh).state['forklift:vehicle:owner'] == server_id then return veh, pickup.ped end
+end
+
+---@param location integer
+---@return boolean? is_using
+local function is_any_player_using_warehouse(location)
+  location = location or GetClosestWarehouse()
+  if not LOCATIONS[location] then return end
+  return GlobalState['forklift:warehouse:'..location] ~= nil
+end
+
+---@param coords vector3
+---@param vehicle integer
+---@param park vector4?
+---@return integer sequence
+local function init_driving_task(coords, vehicle, park)
+  local sequence = OpenSequenceTask()
+  TaskSetBlockingOfNonTemporaryEvents(0, true)
+  TaskEnterVehicle(0, vehicle, -1, -1, 1.0, 3, 0)
+  TaskVehicleDriveToCoordLongrange(0, vehicle, coords.x, coords.y, coords.z, 20.0, 2640055, 30.0)
+  if park then TaskVehiclePark(0, vehicle, park.x, park.y, park.z, park.w, 1, 20.0, true) end
+  TaskPause(0, 1000)
+  CloseSequenceTask(sequence)
+  return sequence
+end
+
+---@param ped integer
+---@param is_driver boolean?
+local function init_ped(ped, is_driver)
+  SetBlockingOfNonTemporaryEvents(ped, true)
+  SetEntityInvincible(ped, true)
+  SetPedDiesWhenInjured(ped, false)
+  SetPedCanPlayAmbientAnims(ped, true)
+  SetPedCanRagdollFromPlayerImpact(ped, false)
+  FreezeEntityPosition(ped, not is_driver)
+  if not is_driver then return end
+  SetDriverAbility(ped, 1.0)
+  SetDriverAggressiveness(ped, 0.0)
+end
+
+---@param ped integer
+---@param sequence integer
+---@param cb fun(ped)
+---@param progress integer?
+---@param sleep integer?
+---@return integer progress
+local function await_sequence(ped, sequence, cb, progress, sleep)
+  progress = progress or -1
+  sleep = sleep or 1000
+  return await(function()
+    repeat Wait(sleep) until GetSequenceProgress(ped) == progress or not DoesEntityExist(ped)
+    cb(ped)
+    ClearSequenceTask(sequence)
+    return progress
+  end)
+end
+
+---@param vehicle integer
+---@return vector3 coords
+local function get_door_coords(vehicle)
+  local dr_coords = GetWorldPositionOfEntityBone(vehicle, GetEntityBoneIndexByName(vehicle, 'boot'))
+  return GetOffsetFromCoordAndHeadingInWorldCoords(dr_coords.x, dr_coords.y, dr_coords.z, GetEntityHeading(vehicle), 0.0, -0.5, 0.0)
+end
+
+---@param coords vector3
+---@param dist number
+---@return vector3 node
+local function get_random_node(coords, dist)
+  ---@diagnostic disable-next-line: redundant-parameter, param-type-mismatch
+  local _, node = GetRandomVehicleNode(coords.x, coords.y, coords.z, dist, 1, false, true, true)
+  return node
+end
+
+local function deliver_load(location, coords, vehicle, driver)
+  local netID, ped_netID = VehToNet(vehicle), PedToNet(driver)
+  local sequence = init_driving_task(get_random_node(coords, 500.0), vehicle)
+  SetVehicleDoorShut(vehicle, 5, false)
+  TaskPerformSequence(driver, sequence)
+  SetPedKeepTask(driver, true)
+  await_sequence(driver, sequence, function()
+    TaskVehicleDriveWander(driver, vehicle, 20.0, 2640055)
+    SetPedKeepTask(driver, true)
+    SetEntityCleanupByEngine(vehicle, true); SetEntityCleanupByEngine(driver, true)
+    TriggerServerEvent('forklift:server:RemoveEntity', location, netID); TriggerServerEvent('forklift:server:RemoveEntity', location, ped_netID)
+  end)
+end
+
+---@param entity integer
+---@return number health_ratio
+local function get_damage_ratio(entity)
+  return GetEntityHealth(entity) / GetEntityMaxHealth(entity)
+end
+
+local function await_load(location, coords, driver, vehicle, loads)
+  local pallet = get_owned_object(location)
+  if not pallet then return end
+  local plt_coords = GetEntityCoords(pallet)
+  local does_entity_exist = DoesEntityExist
+  local dr_coords = get_door_coords(vehicle)
+  local dist = #(dr_coords - plt_coords)
+  loads = loads or 1
+  return await(function()
+    local exists = does_entity_exist(vehicle)
+    local cancelled = not is_player_using_warehouse(location)
+    local delivered = 0
+    repeat
+      Wait(1000)
+      plt_coords = GetEntityCoords(pallet)
+      dist = #(dr_coords - plt_coords)
+      if dist <= 2.0 then
+        local health = get_damage_ratio(pallet)
+        -- Pay player based on health (& possibly time taken).
+        setup_mission_obj(pallet, false, false, true)
+        delivered += 1
+      end
+      cancelled = not is_player_using_warehouse(location)
+      exists = does_entity_exist(vehicle)
+    until not exists or delivered >= loads or cancelled
+    iblips:remove(Warehouses[location].pickup.blip)
+    deliver_load(location, coords, vehicle, driver)
+  end)
+end
+
+---@param location integer
+---@param initiate boolean
+---@param cancelled boolean
+local function setup_mission_ai(location, initiate, cancelled)
+  local warehouse = LOCATIONS[location]
+  if not warehouse then return end
+  if is_any_player_using_warehouse(location) and not is_player_using_warehouse(location) then return end
+  local pickup = warehouse.Pickup
+  local veh_mod = pickup.vehicle
+  local ped_mod = pickup.driver
+  local start = pickup.coords[1]
+  local fin = pickup.coords[2]
+  if initiate then
+    local _, node = GetClosestVehicleNode(fin.x, fin.y, fin.z, 1, 3.0, 0)
+    SetFocusPosAndVel(start.x, start.y, start.z, 0.0, 0.0, 0.0)
+    ClearAreaOfVehicles(start.x, start.y, start.z, 10.0, false, false, false, false, false)
+    bridge.triggercallback(nil, 'forklift:server:CreateVehicle', function(net_id, driver)
+      Wait(500)
+      local veh = NetToVeh(net_id)
+      local ped = NetToPed(driver)
+      local plate = 'FORK'..tostring(math.random(1000, 9999))
+      local sequence = init_driving_task(node, veh, fin)
+      Warehouses[location].pickup = Warehouses[location].pickup or {}
+      Warehouses[location].pickup.veh = veh
+      Warehouses[location].pickup.ped = ped
+      init_vehicle(veh, plate, true)
+      init_ped(ped, true)
+      TaskPerformSequence(ped, sequence)
+      SetPedKeepTask(ped, true)
+      ClearFocus()
+      await_sequence(ped, sequence, function()
+        SetVehicleDoorOpen(veh, 5, false, false)
+        local coords = get_door_coords(vehicle)
+        repeat Wait(100) until GetVehicleDoorAngleRatio(veh, 5) >= 0.75
+        draw_marker(veh, function() return GetVehicleDoorAngleRatio(veh, 5) >= 0.75 end, coords)
+        NOTIFY(nil, 'The delivery driver has arrived...', 'info')
+      end, 4)
+      await_load(location, start, ped, veh)
+    end, veh_mod, start, location, ped_mod)
+  else
+    local identifier = bridge.getidentifier()
+    local veh, driver = get_owned_pickup(location)
+    deliver_load(location, start, veh, driver)
+    TriggerServerEvent('forklift:server:ReserveWarehouse', location, identifier, false)
+    if cancelled then
+      iblips:remove(Warehouses[location].pickup.blip)
+      table.wipe(Warehouses[location].pickup)
+    end
+  end
+end
+
 ---@param resource string? Stopping resource name or nil.
 local function deinit_script(resource)
   if resource and type(resource) == 'string' and resource ~= RES_NAME then return end
-  local obj = get_owned_object()
+  local current = get_warehouse_player_is_using() or GetClosestWarehouse()
+  local obj = get_owned_object(current)
   if obj then setup_mission_obj(obj, false, true, true) end
-  local veh = get_owned_vehicle()
-  if veh then setup_vehicle(get_warehouse_player_is_using() or GetClosestWarehouse(), false) end
+  local veh = get_owned_vehicle(current)
+  if veh then setup_vehicle(current, false) end
+  local pickup = get_owned_pickup(current)
+  if pickup then setup_mission_ai(current, false, true) end
   for i = 1, #LOCATIONS do
     local location = LOCATIONS[i]
     local warehouse = Warehouses[i]
     if location.blip.enabled and warehouse.blips.main then iblips:remove(warehouse.blips.main) end
     if warehouse.garage then iblips:remove(warehouse.garage.blip); table.wipe(warehouse.garage) end
+    if warehouse.pickup then iblips:remove(warehouse.pickup.blip); table.wipe(warehouse.pickup) end
     if is_player_using_warehouse(i) then TriggerServerEvent('forklift:server:ReserveWarehouse', location, bridge.getidentifier(), false) end
     table.wipe(warehouse)
   end
@@ -783,20 +972,6 @@ local function catch_entity(entity)
 end
 
 ---@param ped integer
----@param is_driver boolean?
-local function init_ped(ped, is_driver)
-  SetBlockingOfNonTemporaryEvents(ped, true)
-  SetEntityInvincible(ped, true)
-  SetPedDiesWhenInjured(ped, false)
-  SetPedCanPlayAmbientAnims(ped, true)
-  SetPedCanRagdollFromPlayerImpact(ped, false)
-  FreezeEntityPosition(ped, not is_driver)
-  if not is_driver then return end
-  SetDriverAbility(ped, 1.0)
-  SetDriverAggressiveness(ped, 0.0)
-end
-
----@param ped integer
 ---@param ped_data {model: string, coords: vector4, scenario: string, chair: string|number?}
 local function setup_ped_scenario(ped, ped_data)
   local coords = ped_data.coords
@@ -808,14 +983,6 @@ local function setup_ped_scenario(ped, ped_data)
     ProcessEntityAttachments(ped)
   end
   TaskStartScenarioInPlace(ped, scenario, 0, true)
-end
-
----@param location integer
----@return boolean? is_using
-local function is_any_player_using_warehouse(location)
-  location = location or GetClosestWarehouse()
-  if not LOCATIONS[location] then return end
-  return GlobalState['forklift:warehouse:'..location] ~= nil
 end
 
 ---@param name string
@@ -916,161 +1083,6 @@ local GARAGE_BLIP <const> = {
   distance = 250.0,
 }
 
----@param coords vector3
----@param vehicle integer
----@param park vector4?
----@return integer sequence
-local function init_driving_task(coords, vehicle, park)
-  local sequence = OpenSequenceTask()
-  TaskSetBlockingOfNonTemporaryEvents(0, true)
-  TaskEnterVehicle(0, vehicle, -1, -1, 1.0, 3, 0)
-  TaskVehicleDriveToCoordLongrange(0, vehicle, coords.x, coords.y, coords.z, 20.0, 2640055, 30.0)
-  if park then TaskVehiclePark(0, vehicle, park.x, park.y, park.z, park.w, 1, 20.0, true) end
-  TaskPause(0, 1000)
-  CloseSequenceTask(sequence)
-  return sequence
-end
-
----@param vehicle integer
----@return vector3 coords
-local function get_door_coords(vehicle)
-  local dr_coords = GetWorldPositionOfEntityBone(vehicle, GetEntityBoneIndexByName(vehicle, 'boot'))
-  return GetOffsetFromCoordAndHeadingInWorldCoords(dr_coords.x, dr_coords.y, dr_coords.z, GetEntityHeading(vehicle), 0.0, -0.5, 0.0)
-end
-
----@param ped integer
----@param sequence integer
----@param cb fun(ped)
----@param progress integer?
----@param sleep integer?
----@return integer progress
-local function await_sequence(ped, sequence, cb, progress, sleep)
-  progress = progress or -1
-  sleep = sleep or 1000
-  return await(function()
-    repeat Wait(sleep) until GetSequenceProgress(ped) == progress or not DoesEntityExist(ped)
-    cb(ped)
-    ClearSequenceTask(sequence)
-    return progress
-  end)
-end
-
----@param entity integer
----@return number health_ratio
-local function get_damage_ratio(entity)
-  return GetEntityHealth(entity) / GetEntityMaxHealth(entity)
-end
-
----@param coords vector3
----@param dist number
----@return vector3 node
-local function get_random_node(coords, dist)
-  ---@diagnostic disable-next-line: redundant-parameter, param-type-mismatch
-  local _, node = GetRandomVehicleNode(coords.x, coords.y, coords.z, dist, 1, false, true, true)
-  return node
-end
-
-local function deliver_load(coords, vehicle, driver)
-  local sequence = init_driving_task(get_random_node(coords, 500.0), vehicle)
-  SetVehicleDoorShut(vehicle, 5, false)
-  TaskPerformSequence(driver, sequence)
-  SetPedKeepTask(driver, true)
-  await_sequence(driver, sequence, function()
-    TaskVehicleDriveWander(driver, vehicle, 20.0, 2640055)
-    SetPedKeepTask(driver, true)
-    SetEntityCleanupByEngine(vehicle, true)
-    SetEntityCleanupByEngine(driver, true)
-  end)
-end
-
-local function await_load(location, coords, driver, vehicle, loads)
-  local pallet = get_owned_object(location)
-  if not pallet then return end
-  local plt_coords = GetEntityCoords(pallet)
-  local does_entity_exist = DoesEntityExist
-  local dr_coords = get_door_coords(vehicle)
-  local dist = #(dr_coords - plt_coords)
-  loads = loads or 1
-  return await(function()
-    local exists = does_entity_exist(vehicle)
-    local cancelled = not is_player_using_warehouse(location)
-    local delivered = 0
-    repeat
-      Wait(1000)
-      plt_coords = GetEntityCoords(pallet)
-      dist = #(dr_coords - plt_coords)
-      if dist <= 2.0 then
-        local health = get_damage_ratio(pallet)
-        -- Pay player based on health (& possibly time taken).
-        setup_mission_obj(pallet, false, false, true)
-        delivered += 1
-      end
-      cancelled = not is_player_using_warehouse(location)
-      exists = does_entity_exist(vehicle)
-    until not exists or delivered >= loads or cancelled
-    deliver_load(coords, vehicle, driver)
-  end)
-end
-
-local function get_owned_pickup(location)
-  location = location or get_warehouse_player_is_using() or GetClosestWarehouse()
-  local warehouse = Warehouses[location]
-  if not warehouse then return end
-  local pickup = warehouse.pickup
-  if not pickup then return end
-  local server_id = GetPlayerServerId(PlayerId())
-  local veh = pickup.veh
-  if veh and DoesEntityExist(veh) and Entity(veh).state['forklift:vehicle:owner'] == server_id then return veh, pickup.ped end
-end
-
----@param location integer
----@param initiate boolean
----@param cancelled boolean
-local function setup_mission_ai(location, initiate, cancelled)
-  local warehouse = LOCATIONS[location]
-  if not warehouse then return end
-  if is_any_player_using_warehouse(location) and not is_player_using_warehouse(location) then return end
-  local pickup = warehouse.Pickup
-  local veh_mod = pickup.vehicle
-  local ped_mod = pickup.driver
-  local start = pickup.coords[1]
-  local fin = pickup.coords[2]
-  if initiate then
-    local fnd, node = GetClosestVehicleNode(fin.x, fin.y, fin.z, 1, 3.0, 0)
-    ClearAreaOfVehicles(start.x, start.y, start.z, 10.0, false, false, false, false, false)
-    bridge.triggercallback(nil, 'forklift:server:CreateVehicle', function(net_id, driver)
-      local veh = NetToVeh(net_id)
-      local ped = NetToPed(driver)
-      local plate = 'FORK'..tostring(math.random(1000, 9999))
-      local sequence = init_driving_task(node, veh, fin)
-      Warehouses[location].pickup = Warehouses[location].pickup or {}
-      Warehouses[location].pickup.veh = veh
-      Warehouses[location].pickup.ped = ped
-      init_vehicle(veh, plate, true)
-      init_ped(ped, true)
-      TaskPerformSequence(ped, sequence)
-      SetPedKeepTask(ped, true)
-      await_sequence(ped, sequence, function()
-        SetVehicleDoorOpen(veh, 5, false, false)
-        local coords = get_door_coords(vehicle)
-        repeat Wait(100) until GetVehicleDoorAngleRatio(veh, 5) >= 0.75
-        draw_marker(veh, function() return GetVehicleDoorAngleRatio(veh, 5) >= 0.75 end, coords)
-        NOTIFY(nil, 'The delivery driver has arrived...', 'info')
-      end, 4)
-      await_load(location, start, ped, veh)
-    end, veh_mod, start, location, ped_mod)
-  else
-    local identifier = bridge.getidentifier()
-    local veh, driver = get_owned_pickup(location)
-    deliver_load(start, veh, driver)
-    TriggerServerEvent('forklift:server:ReserveWarehouse', location, identifier, false)
-    if cancelled then
-      -- iblips:remove(Warehouses[location].garage.blip)
-      table.wipe(Warehouses[location].pickup)
-    end
-  end
-end
-
 ---@param location integer
 ---@param initiate boolean
 ---@param cancelled boolean
@@ -1096,8 +1108,8 @@ local function setup_order(location, initiate, cancelled)
     local pnt, mdl = pnts[rdm_a], mdls[rdm_b]
     print('Pallet Model:', mdl)
     local pallet = NetToObj(create_object(mdl, pnt, location))
-    setup_mission_obj(pallet, true, false, true)
-    if not Warehouses[location].garage then Warehouses[location].garage = {} end
+    -- setup_mission_obj(pallet, true, false, true)
+    Warehouses[location].garage = Warehouses[location].garage or {}
     Warehouses[location].garage.blip = iblips:initblip('coord', {coords = warehouse.Garage.coords.xyz}, GARAGE_BLIP)
     NOTIFY(nil, 'Delivery is marked...', 'success', 2500)
     Wait(1000)
@@ -1122,19 +1134,26 @@ local function sync_object_state_bag(name, key, value, _, replicated)
   local obj = GetEntityFromStateBagName(name)
   if not obj or obj == 0 or not DoesEntityExist(obj) or not catch_entity(obj) then return end
   if key == 'forklift:object:init' then
-    local netID = ObjToNet(obj)
-    if not NetworkDoesEntityExistWithNetworkId(netID) then return end
-    NetworkUseHighPrecisionBlending(netID, true)
-    NetworkSetObjectForceStaticBlend(obj, true)
-    PlaceObjectOnGroundProperly(obj)
-    SetEntityAsMissionEntity(obj, true, true)
-    SetEntityCanBeDamaged(obj, true)
-    SetEntityDynamic(obj, true)
-    -- SetEntityCollision(obj, true, true)
+    setup_mission_obj(obj, true, false, false)
   elseif key == 'forklift:object:fin' then
     -- local location = value
     -- DeleteObject(obj)
   end
+end
+
+---@param name string
+---@param key string
+---@param value any
+---@param replicated boolean
+local function catch_driver_state(name, key, value, _, replicated)
+  if not value then return end
+  local veh = GetEntityFromStateBagName(name)
+  if not veh or veh == 0 or not DoesEntityExist(veh) or not catch_entity(veh) then return end
+  local netID = VehToNet(veh)
+  local location = GetStateBagValue('entity:'..netID, 'forklift:vehicle:warehouse')
+  Warehouses[location] = Warehouses[location] or {}
+  Warehouses[location].pickup = Warehouses[location].pickup or {}
+  Warehouses[location].pickup.blip = iblips:initblip('vehicle', {vehicle = veh}, PICKUP_BLIP)
 end
 
 ---@param entity integer?
@@ -1161,10 +1180,33 @@ AddEventHandler('forklift:client:SetupOrder', setup_order)
 AddEventHandler('forklift:client:SetupVehicle', setup_vehicle)
 AddStateBagChangeHandler('forklift:ped:init', '', catch_ped_state)
 AddStateBagChangeHandler('', '', sync_object_state_bag)
+AddStateBagChangeHandler('forklift:vehicle:driver', '', catch_driver_state)
 
 RegisterNetEvent(LOAD_EVENT, init_script)
 RegisterNetEvent(UNLOAD_EVENT, deinit_script)
 RegisterNetEvent(JOB_EVENT, init_warehouses)
+RegisterNetEvent('forklift:client:RemoveEntity', function(location, netID)
+  local entity = NetToObj(netID)
+  local warehouse = Warehouses[location]
+  if not warehouse then return end
+  for i = 1, #warehouse.objs do
+    if warehouse.objs[i] == entity then
+      table.remove(warehouse.objs, i)
+      iblips:remove(warehouse.blips.objs[i])
+      table.remove(warehouse.blips.objs, i)
+      break
+    end
+  end
+  if warehouse.pallet and warehouse.pallet.obj == entity then
+    iblips:remove(warehouse.pallet.blip)
+    table.wipe(warehouse.pallet)
+  end
+  if warehouse.pickup and warehouse.pickup.veh == entity then
+    iblips:remove(warehouse.pickup.blip)
+    table.wipe(warehouse.pickup)
+  end
+  if DoesEntityExist(entity) then DeleteEntity(entity) end
+end)
 
 ---@param location number
 RegisterNetEvent('don-forklift:client:StartJob', function(location)
