@@ -1,6 +1,6 @@
 local duff, Citizen = duff, Citizen
 local iblips = exports.iblips
-local await, blips, bridge, math, require, streaming = duff.await, duff.blips, duff.bridge, duff.math, duff.package.require, duff.streaming
+local array, await, blips, bridge, math, require, streaming = duff.array, duff.await, duff.blips, duff.bridge, duff.math, duff.package.require, duff.streaming
 ---@module 'don-forklift.shared.config'
 local config = require 'shared.config'
 local DEBUG_MODE <const> = config.DebugMode
@@ -859,22 +859,24 @@ local function await_load(location, coords, driver, vehicle, loads)
   local dist = #(dr_coords - plt_coords)
   loads = loads or 1
   return await(function()
+    local identifier = bridge.getidentifier()
     local exists = does_entity_exist(vehicle)
     local cancelled = not is_player_using_warehouse(location)
     local delivered = 0
+    local healths = {}
     repeat
       Wait(1000)
       plt_coords = GetEntityCoords(pallet)
       dist = #(dr_coords - plt_coords)
       if dist <= 2.0 then
-        local health = get_damage_ratio(pallet)
-        -- Pay player based on health (& possibly time taken).
+        healths[#healths + 1] = get_damage_ratio(pallet)
         setup_mission_obj(pallet, false, false, true)
         delivered += 1
       end
       cancelled = not is_player_using_warehouse(location)
       exists = does_entity_exist(vehicle)
     until not exists or delivered >= loads or cancelled
+    TriggerServerEvent('forklift:server:FinishMission', location, identifier, array.foldright(healths, function(a, b) return a + b end, 0) / #healths, loads) -- Pay player based on health (& possibly time taken).
     iblips:remove(Warehouses[location].pickup.blip)
     deliver_load(location, coords, vehicle, driver)
   end)

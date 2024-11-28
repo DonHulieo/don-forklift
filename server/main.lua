@@ -1,5 +1,5 @@
 local duff = duff
-local bridge, require = duff.bridge, duff.package.require
+local bridge, interval, require = duff.bridge, duff.interval, duff.package.require
 ---@module 'don-forklift.shared.config'
 local config = require 'shared.config'
 local DEBUG_MODE <const> = config.DebugMode
@@ -73,16 +73,15 @@ local function deinit_script(resource)
 	end
 end
 
----@param warehouse integer
----@param identifier string
----@param reserve boolean
-local function reserve_warehouse(warehouse, identifier, reserve)
-	if not LOCATIONS[warehouse] then return end
+local function create_timer(location, identifier)
 	local src = source
-	if identifier ~= bridge.getidentifier(src) then return end
-	GlobalState:set('forklift:warehouse:'..warehouse, reserve and identifier or nil, true)
-	if not reserve then GlobalState:set('forklift:warehouse:'..warehouse..':last', identifier, true) end
-	debug_print((reserve and 'Reserved' or 'Unreserved')..' warehouse '..warehouse..' for '..bridge.getplayername(src)..' ('..identifier..')')
+	if not LOCATIONS[location] then return end
+	local warehouse = Warehouses[location]
+	if warehouse[identifier] then return end
+	CreateThread(function()
+		warehouse[identifier] = GetGameTimer()
+		repeat Wait(1000) until not warehouse[identifier]
+	end)
 end
 
 ---@param location integer
@@ -91,6 +90,25 @@ local function is_player_using_warehouse(location, identifier)
   location = location or GetClosestWarehouse(GetPlayerPed(source))
   if not LOCATIONS[location] then return end
   return GlobalState['forklift:warehouse:'..location] == identifier
+end
+
+---@param warehouse integer
+---@param identifier string
+---@param reserve boolean
+local function reserve_warehouse(warehouse, identifier, reserve)
+	if not LOCATIONS[warehouse] then return end
+	local src = source
+	if identifier ~= bridge.getidentifier(src) then return end -- Possible exploit banning
+	local _, dist = GetClosestWarehouse(GetPlayerPed(src))
+	if dist >= 50.0 then return end -- Possible exploit banning
+	GlobalState:set('forklift:warehouse:'..warehouse, reserve and identifier or nil, true)
+	if not reserve then
+		GlobalState:set('forklift:warehouse:'..warehouse..':last', identifier, true)
+		Warehouses[warehouse][identifier] = nil
+	else
+		create_timer(warehouse, identifier)
+	end
+	debug_print((reserve and 'Reserved' or 'Unreserved')..' warehouse '..warehouse..' for '..bridge.getplayername(src)..' ('..identifier..')')
 end
 
 ---@param model string|integer
@@ -215,6 +233,14 @@ end)
 
 RegisterServerEvent('forklift:server:ReserveWarehouse', reserve_warehouse)
 RegisterServerEvent('forklift:server:RemoveEntity', remove_entity)
+RegisterServerEvent('forklift:server:FinishMission', function(location, identifier, health)
+	local src = source
+	if not bridge.getplayer(src) then return end
+	if identifier ~= bridge.getidentifier(src) then return end -- Possible exploit banning
+	if not is_player_using_warehouse(location, identifier) then return end -- Possible exploit banning
+	local time = Warehouses[location][identifier]
+	print('Time: '..time, 'GameTimer: '..GetGameTimer(), 'Difference: '..(GetGameTimer() - time), 'As Secs:'..math.floor((GetGameTimer() - time) / 1000), 'Health Ratio: '..health)
+end)
 -------------------------------- CALLBACKS --------------------------------
 bridge.createcallback('forklift:server:CreateObject', create_object_cb)
 bridge.createcallback('forklift:server:CreateVehicle', create_vehicle_cb)
