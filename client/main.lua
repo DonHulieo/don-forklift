@@ -576,19 +576,19 @@ local PALLET_BLIP <const> = {
   distance = 250.0,
 }
 
----@param entity integer The entity ID of the vehicle or traffic light.
-local function draw_marker(entity)
+---@param entity integer The entity ID.
+local function draw_marker(entity, condition, position)
   if not MARKER_ENABLED then return end
   if not DoesEntityExist(entity) then return end
   local ped = PlayerPedId()
-  local coords = GetEntityCoords(entity)
+  local coords = not position and GetEntityCoords(entity) or position
   local ply_coords = GetEntityCoords(ped)
   local dist = #(coords - ply_coords)
   CreateThread(function()
     local sleep = 0
-    while DoesEntityExist(entity) do
+    while condition and condition(entity) or DoesEntityExist(entity) do
       Wait(sleep)
-      coords, ply_coords = GetEntityCoords(entity), GetEntityCoords(ped)
+      coords, ply_coords = not position and GetEntityCoords(entity) or position, GetEntityCoords(ped)
       dist = #(coords - ply_coords)
       if dist <= 15.0 then
         sleep = 0
@@ -702,6 +702,9 @@ local function setup_vehicle(location, initiate)
         repeat Wait(100) until not IsPedInVehicle(ped, veh, false)
       end
       TriggerServerEvent('forklift:server:RemoveEntity', location, VehToNet(veh))
+      SetTimeout(1000, function()
+        if DoesEntityExist(veh) then SetEntityAsMissionEntity(veh, true, true); DeleteEntity(veh) end
+      end)
       NOTIFY(nil, 'Forklift returned to garage...', 'success')
     else
       NOTIFY(nil, 'You have no forklift to return...', 'error')
@@ -876,6 +879,79 @@ local GARAGE_BLIP <const> = {
   distance = 250.0,
 }
 
+---@param coords vector3
+---@param vehicle integer
+---@param park vector4
+---@return integer sequence
+local function init_driving_task(coords, vehicle, park)
+  local sequence = OpenSequenceTask()
+  TaskSetBlockingOfNonTemporaryEvents(0, true)
+  TaskEnterVehicle(0, vehicle, -1, -1, 1.0, 3, 0)
+  TaskVehicleDriveToCoordLongrange(0, vehicle, coords.x, coords.y, coords.z, 20.0, 2640055, 30.0)
+  if park then TaskVehiclePark(0, vehicle, park.x, park.y, park.z, park.w, 1, 20.0, true) end
+  TaskPause(0, 1000)
+  CloseSequenceTask(sequence)
+  return sequence
+end
+
+---@param ped integer
+---@param sequence integer
+---@param cb fun(ped)
+---@param progress integer?
+---@param sleep integer?
+---@return integer progress
+local function await_sequence(ped, sequence, cb, progress, sleep)
+  progress = progress or -1
+  sleep = sleep or 1000
+  return await(function()
+    local time = game_timer()
+    repeat Wait(sleep) until GetSequenceProgress(ped) == progress
+    cb(ped)
+    return progress
+  end)
+end
+
+local function setup_mission_ai(location, initiate, cancelled)
+  local warehouse = LOCATIONS[location]
+  if not warehouse then return end
+  if is_any_player_using_warehouse(location) and not is_player_using_warehouse(location) then return end
+  local pickup = warehouse.Pickup
+  local veh_mod = pickup.vehicle
+  local ped_mod = pickup.driver
+  local start = pickup.coords[1]
+  local fin = pickup.coords[2]
+  if initiate then
+    local fnd, node = GetClosestVehicleNode(fin.x, fin.y, fin.z, 1, 3.0, 0)
+    ClearAreaOfVehicles(start.x, start.y, start.z, 10.0, false, false, false, false, false)
+    bridge.triggercallback(nil, 'forklift:server:CreateVehicle', function(net_id, driver)
+      local veh = NetToVeh(net_id)
+      local ped = NetToPed(driver)
+      local plate = 'FORK'..tostring(math.random(1000, 9999))
+      Warehouses[location].pickup = Warehouses[location].pickup or {}
+      Warehouses[location].pickup.veh = veh
+      Warehouses[location].pickup.ped = ped
+      SetEntityAsMissionEntity(veh, true, true)
+      N_0x6ebfb22d646ffc18(veh, false)
+      N_0x182f266c2d9e2beb(veh, 250.0)
+      SetVehicleNumberPlateText(veh, plate)
+      SetVehicleEngineOn(veh, true, false, false)
+      SetVehicleHandlingHashForAi(veh, -1103972294)
+      init_ped(ped, false)
+      SetDriverAbility(ped, 1.0)
+      SetDriverAggressiveness(ped, 0.0)
+      TaskPerformSequence(ped, init_driving_task(node, veh, fin))
+      SetPedKeepTask(ped, true)
+      await_sequence(ped, 4, function()
+        SetVehicleDoorOpen(veh, 5, false, false)
+        local coords = GetWorldPositionOfEntityBone(veh, GetEntityBoneIndexByName(veh, 'boot'))
+        repeat Wait(100) until GetVehicleDoorAngleRatio(veh, 5) >= 0.75
+        draw_marker(veh, function() return GetVehicleDoorAngleRatio(veh, 5) >= 0.75 end, coords)
+        NOTIFY(nil, 'The delivery driver has arrived...', 'success')
+      end)
+    end, veh_mod, start, location, ped_mod)
+  end
+end
+
 ---@param location integer
 ---@param initiate boolean
 ---@param cancelled boolean
@@ -903,11 +979,13 @@ local function setup_order(location, initiate, cancelled)
     if not Warehouses[location].garage then Warehouses[location].garage = {} end
     Warehouses[location].garage.blip = iblips:initblip('coord', {coords = warehouse.Garage.coords.xyz}, GARAGE_BLIP)
     NOTIFY(nil, 'Delivery is marked...', 'success', 2500)
+    setup_mission_ai(location, true, false)
     Wait(1000)
     ClearPedTasks(ped)
   else
     setup_mission_obj(get_owned_object(location) --[[@as integer]], false, cancelled, true)
     if cancelled then
+      setup_vehicle(location, false)
       NOTIFY(nil, 'Order canceled...', 'error')
       iblips:remove(Warehouses[location].garage.blip)
       table.wipe(Warehouses[location].garage)
