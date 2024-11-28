@@ -4,6 +4,14 @@ local bridge, interval, require = duff.bridge, duff.interval, duff.package.requi
 local config = require 'shared.config'
 local DEBUG_MODE <const> = config.DebugMode
 local LOCATIONS <const> = config.Locations
+---@module 'don-forklift.server.config'
+local server_config = require 'server.config'
+local DISCORD <const> = server_config.DiscordLogs
+local LOGS_ENABLED <const> = DISCORD.enabled
+local COLOUR <const> = DISCORD.colour
+local IMAGE <const> = DISCORD.image
+local WEBHOOK <const> = DISCORD.webhook
+local PAY <const> = server_config.Pay
 
 local QBCore = exports['qb-core']:GetCoreObject()
 local RES_NAME <const> = GetCurrentResourceName()
@@ -73,23 +81,24 @@ local function deinit_script(resource)
 	end
 end
 
-local function create_timer(location, identifier)
-	local src = source
-	if not LOCATIONS[location] then return end
-	local warehouse = Warehouses[location]
-	if warehouse[identifier] then return end
-	CreateThread(function()
-		warehouse[identifier] = GetGameTimer()
-		repeat Wait(1000) until not warehouse[identifier]
-	end)
-end
-
 ---@param location integer
 ---@return boolean?, integer?
 local function is_player_using_warehouse(location, identifier)
   location = location or GetClosestWarehouse(GetPlayerPed(source))
   if not LOCATIONS[location] then return end
   return GlobalState['forklift:warehouse:'..location] == identifier
+end
+
+local function create_timer(location, identifier)
+	local src = source
+	if not LOCATIONS[location] then return end
+	local warehouse = Warehouses[location]
+	if warehouse[identifier] then return end
+	CreateThread(function()
+		local limit = PAY[location].time_limit
+		warehouse[identifier] = GetGameTimer()
+		repeat Wait(1000) until not warehouse[identifier] or not is_player_using_warehouse(location, identifier) or GetGameTimer() - warehouse[identifier] >= limit
+	end)
 end
 
 ---@param warehouse integer
@@ -202,6 +211,32 @@ local function remove_entity(location, netID)
 	TriggerClientEvent('forklift:client:RemoveEntity', -1, location, netID)
 end
 
+---@param pay number
+---@param loads integer
+---@param time integer
+---@param max_time integer
+---@return number score
+local function get_pay(pay, loads, time, max_time) -- https://gamedev.stackexchange.com/questions/165604/score-multiplier-based-on-lowest-time
+  local max, denom = pay - 1, loads * 0.01
+  return (max / (denom ^ (time / max_time))) + 1
+end
+
+---@param location integer
+---@param identifier string
+---@param health number
+---@param loads integer
+local function finish_mission(location, identifier, health, loads)
+	local src = source
+	if not bridge.getplayer(src) then return end
+	if identifier ~= bridge.getidentifier(src) then return end -- Possible exploit banning
+	if not is_player_using_warehouse(location, identifier) then return end -- Possible exploit banning
+	local time = Warehouses[location][identifier]
+	if not time then return end
+	local pay_rates = PAY[location]
+	local pay = get_pay(pay_rates.min_per_pallet, loads, math.floor((GetGameTimer() - time) / 1000), pay_rates.time_limit) * health
+	print('Time: '..time, 'GameTimer: '..GetGameTimer(), 'Difference: '..(GetGameTimer() - time), 'As Secs:'..math.floor((GetGameTimer() - time) / 1000), 'Health Ratio: '..health, 'Pay: '..pay)
+end
+
 ---@param entity integer
 ---@return number, number
 function GetClosestWarehouse(entity)
@@ -233,14 +268,7 @@ end)
 
 RegisterServerEvent('forklift:server:ReserveWarehouse', reserve_warehouse)
 RegisterServerEvent('forklift:server:RemoveEntity', remove_entity)
-RegisterServerEvent('forklift:server:FinishMission', function(location, identifier, health)
-	local src = source
-	if not bridge.getplayer(src) then return end
-	if identifier ~= bridge.getidentifier(src) then return end -- Possible exploit banning
-	if not is_player_using_warehouse(location, identifier) then return end -- Possible exploit banning
-	local time = Warehouses[location][identifier]
-	print('Time: '..time, 'GameTimer: '..GetGameTimer(), 'Difference: '..(GetGameTimer() - time), 'As Secs:'..math.floor((GetGameTimer() - time) / 1000), 'Health Ratio: '..health)
-end)
+RegisterServerEvent('forklift:server:FinishMission', finish_mission)
 -------------------------------- CALLBACKS --------------------------------
 bridge.createcallback('forklift:server:CreateObject', create_object_cb)
 bridge.createcallback('forklift:server:CreateVehicle', create_vehicle_cb)
