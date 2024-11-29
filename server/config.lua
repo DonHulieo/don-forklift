@@ -14,7 +14,8 @@ return {
   ['Pay'] = {
     {
       min_per_pallet = 50,
-      time_limit = 300
+      time_limit = 300,
+      max_loads = 5
     }
   }
 }
