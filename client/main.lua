@@ -86,20 +86,24 @@ local PALLET_BLIP <const> = {
 }
 
 ---@param entity integer The entity ID.
+---@param condition (fun(entity: integer): boolean?)? The condition to check if the marker should be drawn.
+---@param position vector3? The position to draw the marker at.
 local function draw_marker(entity, condition, position)
   if not MARKER_ENABLED then return end
   if not DoesEntityExist(entity) then return end
   local ped = PlayerPedId()
-  local coords = not position and GetEntityCoords(entity) or position
+  local coords = position or GetEntityCoords(entity)
   local ply_coords = GetEntityCoords(ped)
   local dist = #(coords - ply_coords)
   CreateThread(function()
+    local draw = condition and condition(entity) or DoesEntityExist(entity)
     local sleep = 0
-    while condition and condition(entity) or DoesEntityExist(entity) do
+    while draw do
       Wait(sleep)
-      coords, ply_coords = not position and GetEntityCoords(entity) or position, GetEntityCoords(ped)
+      coords, ply_coords = position or GetEntityCoords(entity), GetEntityCoords(ped)
       dist = #(coords - ply_coords)
       if not isLoggedIn then return end
+      if not is_player_using_warehouse(GetClosestWarehouse()) then return end
       if dist <= 15.0 then
         sleep = 0
         ---@diagnostic disable-next-line: param-type-mismatch
@@ -107,6 +111,7 @@ local function draw_marker(entity, condition, position)
       else
         sleep = 1000
       end
+      draw = condition and condition(entity) or DoesEntityExist(entity)
     end
   end)
 end
@@ -385,7 +390,6 @@ local function await_load(location, coords, driver, vehicle, loads)
   local Pallets = warehouse.Pallets
   local pnts, mdls = Pallets.coords, Pallets.models
   loads = loads or 1
-  draw_marker(vehicle, function() return GetVehicleDoorAngleRatio(vehicle, 5) ~= 0.0 end, dr_coords)
   return await(function()
     local identifier = bridge.getidentifier()
     local exists = does_entity_exist(vehicle)
@@ -393,6 +397,7 @@ local function await_load(location, coords, driver, vehicle, loads)
     local wh_data = Warehouses[location]
     local delivered = 0
     local healths = {}
+    draw_marker(vehicle, function(entity) return GetVehicleDoorAngleRatio(entity, 5) >= 0.75 end, dr_coords)
     repeat
       Wait(1000)
       if not DoesEntityExist(pallet) then pallet = get_owned_object(location) end
@@ -452,6 +457,7 @@ local function setup_mission_ai(location, initiate, cancelled)
       SetPedKeepTask(ped, true)
       ClearFocus()
       await_sequence(ped, sequence, function()
+        if not DoesEntityExist(veh) or not is_player_using_warehouse(location) then return end
         SetVehicleDoorOpen(veh, 5, false, false)
         NOTIFY(nil, 'The delivery driver has arrived...', 'info')
         await_load(location, start, ped, veh, Entity(veh).state['forklift:vehicle:loads'])
