@@ -223,8 +223,11 @@ local function remove_entity(location, netID)
 	local entity = NetworkGetEntityFromNetworkId(netID)
 	if not LOCATIONS[location] then return end
 	if not DoesEntityExist(entity) then return end
-	if not is_player_using_warehouse(GetClosestWarehouse(GetPlayerPed(src)), bridge.getidentifier(src)) then return end -- Possible exploit banning
 	local ent_type = GetEntityType(entity)
+	local name = 'entity:'..netID
+	local key = 'forklift:'..(ent_type == 1 and 'ped' or ent_type == 2 and 'vehicle' or 'object')..':owner'
+	local owner = GetStateBagValue('entity:'..netID, key)
+	if owner ~= bridge.getidentifier(src) then return end -- Possible exploit banning
 	local entites = Warehouses[location][ent_type == 1 and 'peds' or ent_type == 2 and 'vehs' or 'objs'] --[[@as integer[]=]]
 	DeleteEntity(entity)
 	for i = #entites, 1, -1 do
@@ -260,7 +263,7 @@ local function finish_mission(location, identifier, health, loads)
 	local time_taken = math.floor((GetGameTimer() - time) / 1000)
 	local pay = math.round(get_pay(pay_rates.min_per_pallet, loads, time_taken, pay_rates.time_limit) * health)
 	local msg = health > 0.9 and 'pristine' or health > 0.75 and 'pretty nice' or health > 0.5 and 'alright, I guess' or health > 0.25 and 'pretty shit' or 'loaded at least'
-	NOTIFY(src, 'This product is '..msg..'. It took you '..time_taken..' seconds, I\'ll give you $'..pay, 'success')
+	NOTIFY(src, 'This product is '..msg..' and it took you '..time_taken..' seconds! I\'ll give you $'..pay..'.', 'success')
 	bridge.addplayermoney(src, 'cash', pay)
 	debug_print('Mission finished for '..bridge.getplayername(src)..' ('..identifier..') at '..location..'\nHealth: '..health..'\nLoads: '..loads..'\nTime: '..time_taken..'\nPay: '..pay)
 	reserve_warehouse(location, identifier, false)
