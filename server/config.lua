@@ -8,13 +8,17 @@ return {
   },
   ---@type {message: string, distance: number}
   ['Kick'] = {
-    message = 'You have been kicked for leaving the range with a weapon.',
-    distance = 2.5
+    message = 'You have been kicked for misusing forklift events.' -- The message to send to the player when they are kicked
   },
   ['Pay'] = {
     {
       min_per_pallet = 50,
       time_limit = 300,
+      max_loads = 5
+    },
+    {
+      min_per_pallet = 50,
+      time_limit = 450,
       max_loads = 5
     }
   }

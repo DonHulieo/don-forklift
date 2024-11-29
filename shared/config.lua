@@ -35,7 +35,7 @@ return {
     {
       name = 'Walker Logistics',
       coords = vector3(153.81, -3214.6, 4.93),
-      job = 'police',
+      job = 'ambulance',
       blip = {
         enabled = true,
         options = {
@@ -73,7 +73,6 @@ return {
             distance = 250.0,
           },
           pallet = {
-            name = 'Pallet',
             colours = {
               opacity = 255,
               primary = 70
@@ -89,7 +88,6 @@ return {
             }
           },
           pickup = {
-            name = 'Delivery Truck',
             colours = {
               opacity = 255,
               primary = 2
@@ -109,11 +107,11 @@ return {
       ['Peds'] = {
         { -- Sign In
           model = `s_m_y_airworker`,
-          coords = vector4(153.81, -3214.6, 4.93, 87.71),
+          coords = vector4(153.81, -3214.6, 5.86, 87.71),
           scenario = 'WORLD_HUMAN_CLIPBOARD'
         }, { -- Garage
           model = `s_m_y_dockwork_01`,
-          coords = vector4(120.89, -3184.05, 4.99, 271.27),
+          coords = vector4(120.89, -3184.05, 5.92, 271.27),
           scenario = 'WORLD_HUMAN_AA_COFFEE'
         }
       },
@@ -131,31 +129,138 @@ return {
       },
       ['Pallets'] = {
         coords = {
-          vector3(160.38, -3141.0, 5.99),
-          vector3(160.65, -3153.77, 5.98),
-          vector3(160.43, -3165.1, 5.99),
-          vector3(162.71, -3211.25, 5.95),
-          vector3(142.92, -3210.27, 5.86),
-          vector3(133.71, -3210.35, 5.86),
-          vector3(117.83, -3217.85, 6.02),
-          vector3(114.89, -3190.58, 6.01),
+          vector4(160.38, -3141.0, 5.99, 270.0),
+          vector4(160.65, -3153.77, 5.98, 270.0),
+          vector4(160.43, -3165.1, 5.99, 270.0),
+          vector4(162.71, -3211.25, 5.95, 270.0),
+          vector4(142.92, -3210.27, 5.86, 270.0),
+          vector4(133.71, -3210.35, 5.86, 180.0),
+          vector4(117.83, -3217.85, 6.02, 180.0),
+          vector4(114.89, -3190.58, 6.01, 90.0),
         },
         models = {
-          -- 'prop_boxpile_01a',
           'prop_boxpile_02b',
           'prop_boxpile_02c',
-          -- 'prop_boxpile_02d',
           'prop_boxpile_03a',
-          -- 'prop_boxpile_04a', too heavy lol
-          -- 'prop_boxpile_05a',
           'prop_boxpile_06a',
-          -- 'prop_boxpile_06b',
           'prop_boxpile_07a',
           'prop_boxpile_07d',
-          -- 'prop_boxpile_08a',
-          'prop_boxpile_09a',
-          -- 'prop_boxpile_10a',
-          -- 'prop_boxpile_10b'
+          'prop_boxpile_09a'
+        }
+      }
+    },     {
+      name = 'Pacific Shipyard',
+      coords = vector3(17.89, -2665.12, 5.01),
+      job = 'police',
+      blip = {
+        enabled = true,
+        options = {
+          main = {
+            name = 'Pacific Shipyard',
+            colours = {
+              opacity = 255,
+              primary = 28
+            },
+            display = {
+              category = 'jobs',
+              display = 'all_select'
+            },
+            style = {
+              sprite = 525,
+              scale = 0.5,
+              short_range = true
+            }
+          },
+          garage = {
+            name = 'Garage',
+            colours = {
+              opacity = 255,
+              primary = 28
+            },
+            display = {
+              category = 'mission',
+              display = 'all_select'
+            },
+            style = {
+              sprite = 357,
+              scale = 0.6,
+              short_range = true
+            },
+            distance = 250.0,
+          },
+          pallet = {
+            colours = {
+              opacity = 255,
+              primary = 70
+            },
+            display = {
+              category = 'mission',
+              display = 'radar_only'
+            },
+            style = {
+              sprite = 478,
+              scale = 0.8,
+              short_range = true
+            }
+          },
+          pickup = {
+            colours = {
+              opacity = 255,
+              primary = 2
+            },
+            display = {
+              category = 'mission',
+              display = 'radar_only'
+            },
+            style = {
+              sprite = 67,
+              scale = 0.8,
+              short_range = true
+            }
+          }
+        }
+      },
+      ['Peds'] = {
+        { -- Sign In
+          model = `s_m_y_airworker`,
+          coords = vector4(17.89, -2665.12, 5.83, 93.33),
+          scenario = 'WORLD_HUMAN_CLIPBOARD'
+        }, { -- Garage
+          model = `s_m_y_dockwork_01`,
+          coords = vector4(27.8, -2654.15, 6.01, 12.7),
+          scenario = 'WORLD_HUMAN_AA_COFFEE'
+        }
+      },
+      ['Garage'] = {
+        model = `forklift`,
+        coords = vector4(21.01, -2650.14, 6.01, 4.0)
+      },
+      ['Pickup'] = {
+        vehicle = `mule2`,
+        driver = `s_m_m_security_01`,
+        coords = {
+          vector4(-197.98, -2598.65, 6.0, 176.56), -- Start
+          vector4(34.26, -2643.08, 5.47, 269.46) -- Stop
+        }
+      },
+      ['Pallets'] = {
+        coords = {
+          vector3(-179.08, -2643.96, 6.02),
+          vector3(-129.5, -2668.91, 6.0),
+          vector3(-128.16, -2705.70, 6.01),
+          vector3(-127.63, -2699.01, 6.01),
+          vector3(-105.28, -2684.25, 6.00),
+          vector3(-100.63, -2647.36, 6.02),
+          vector3(38.79, -2678.8, 6.01),
+          vector3(-83.72, -2655.93, 6.0)
+        },
+        models = {
+          'prop_boxpile_02b',
+          'prop_boxpile_02c',
+          'prop_boxpile_03a',
+          'prop_boxpile_06a',
+          'prop_boxpile_07a',
+          'prop_boxpile_07d'
         }
       }
     }
