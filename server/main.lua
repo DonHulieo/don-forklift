@@ -1,5 +1,5 @@
 local duff = duff
-local bridge, interval, math, require = duff.bridge, duff.interval, duff.math, duff.package.require
+local bridge, math, require = duff.bridge, duff.math, duff.package.require
 ---@module 'don-forklift.shared.config'
 local config = require 'shared.config'
 local DEBUG_MODE <const> = config.DebugMode
@@ -11,6 +11,7 @@ local LOGS_ENABLED <const> = DISCORD.enabled
 local COLOUR <const> = DISCORD.colour
 local IMAGE <const> = DISCORD.image
 local WEBHOOK <const> = DISCORD.webhook
+local KICK <const> = server_config.Kick
 local PAY <const> = server_config.Pay
 local NOTIFY <const> = config.Notify
 local RES_NAME <const> = GetCurrentResourceName()
@@ -128,6 +129,35 @@ local function reserve_warehouse(warehouse, identifier, reserve)
 	debug_print((reserve and 'Reserved' or 'Unreserved')..' warehouse '..warehouse..' for '..bridge.getplayername(src)..' ('..identifier..')')
 end
 
+---@param message string
+local function log_to_discord(message)
+  if not LOGS_ENABLED then return end
+  local data = {
+    ['title'] = 'Don Forklift',
+    ['color'] = COLOUR,
+    ['description'] = message,
+    ['footer'] = {
+      ['text'] = os.date('%c')
+    },
+    ['author'] = {
+      ['name'] = RES_NAME,
+      ['icon_url'] = IMAGE
+    }
+  }
+  PerformHttpRequest(WEBHOOK, function() end, 'POST', json.encode({username = 'Don Forklift', embeds = {data}}), {['Content-Type'] = 'application/json'})
+end
+
+---@param player string? Player source
+---@param reason string?
+local function exploit_ban(player, reason)
+  local src = player or source
+  local name = bridge.getplayername(src)
+	local log_msg = ('**%s** (Identifier: %s | ID: %s has been kicked for exploiting %s.'):format(name, bridge.getidentifier(src), src, reason or 'forklift events')
+  debug_print(log_msg)
+  if LOGS_ENABLED then log_to_discord(log_msg) end
+  DropPlayer(src, KICK.message)
+end
+
 ---@param model string|integer
 ---@return integer hash
 local function hash_model(model)
@@ -141,7 +171,7 @@ end
 ---@return integer? object
 local function create_object_cb(player, model, coords, location)
   if not bridge.getplayer(player) then return end
-	if not is_player_using_warehouse(GetClosestWarehouse(GetPlayerPed(player)), bridge.getidentifier(player)) then return end -- Possible exploit banning
+	if not is_player_using_warehouse(GetClosestWarehouse(GetPlayerPed(player)), bridge.getidentifier(player)) then exploit_ban(tostring(player), 'object creation') return end -- Possible exploit banning
   local obj = CreateObjectNoOffset(hash_model(model), coords.x, coords.y, coords.z, true, false, false)
   repeat Wait(100) until DoesEntityExist(obj)
 	local warehouse = Warehouses[location]
@@ -177,7 +207,7 @@ end
 ---@return integer? netID, integer? ped_netID
 local function create_vehicle_cb(player, model, coords, location, driver)
 	if not bridge.getplayer(player) then return end
-	if not is_player_using_warehouse(GetClosestWarehouse(GetPlayerPed(player)), bridge.getidentifier(player)) then return end -- Possible exploit banning
+	if not is_player_using_warehouse(GetClosestWarehouse(GetPlayerPed(player)), bridge.getidentifier(player)) then exploit_ban(tostring(player), 'vehicle creation') return end -- Possible exploit banning
 	local veh_type = get_vehicle_type(model)
 	local veh = CreateVehicleServerSetter(model, veh_type, coords.x, coords.y, coords.z, coords.w or 0)
   repeat Wait(0) until DoesEntityExist(veh)
@@ -226,12 +256,12 @@ local function remove_entity(location, netID)
 	local ent_type = GetEntityType(entity)
 	local name = 'entity:'..netID
 	local key = 'forklift:'..(ent_type == 1 and 'ped' or ent_type == 2 and 'vehicle' or 'object')..':owner'
-	local owner = GetStateBagValue('entity:'..netID, key)
-	if owner ~= bridge.getidentifier(src) then return end -- Possible exploit banning
-	local entites = Warehouses[location][ent_type == 1 and 'peds' or ent_type == 2 and 'vehs' or 'objs'] --[[@as integer[]=]]
+	local owner = GetStateBagValue(name, key)
+	if owner ~= bridge.getidentifier(src) then exploit_ban(src, 'entity removal') return end -- Possible exploit banning
+	local entities = Warehouses[location][ent_type == 1 and 'peds' or ent_type == 2 and 'vehs' or 'objs'] --[[@as integer[]=]]
 	DeleteEntity(entity)
-	for i = #entites, 1, -1 do
-		if entites[i] == entity then table.remove(entites, i) break end
+	for i = #entities, 1, -1 do
+		if entities[i] == entity then table.remove(entities, i) break end
 	end
 	TriggerClientEvent('forklift:client:RemoveEntity', -1, location, netID)
 	debug_print('Removed entity '..netID..' from '..bridge.getplayername(src)..' at '..location)
@@ -254,9 +284,9 @@ end
 local function finish_mission(location, identifier, health, loads)
 	local src = source
 	if not bridge.getplayer(src) then return end
-	if identifier ~= bridge.getidentifier(src) then return end -- Possible exploit banning
-	if not is_player_using_warehouse(location, identifier) then print('signed out') return end -- Possible exploit banning
-	if health > 1.0 then return end -- Health can't possibly be higher than 1.0, possible exploit banning
+	if identifier ~= bridge.getidentifier(src) then exploit_ban(src, 'mission finish, invalid client identifier') return end -- Possible exploit banning
+	if not is_player_using_warehouse(location, identifier) then exploit_ban(src, 'mission finish, invalid warehouse') return end -- Possible exploit banning
+	if health > 1.0 then exploit_ban(src, 'mission finish, invalid health') return end -- Possible exploit banning
 	local time = Warehouses[location].identifiers[identifier]
 	if not time then return end
 	local pay_rates = PAY[location]
@@ -265,7 +295,9 @@ local function finish_mission(location, identifier, health, loads)
 	local msg = health > 0.9 and 'pristine' or health > 0.75 and 'pretty nice' or health > 0.5 and 'alright, I guess' or health > 0.25 and 'pretty shit' or 'loaded at least'
 	NOTIFY(src, 'This product is '..msg..' and it took you '..time_taken..' seconds! I\'ll give you $'..pay..'.', 'success')
 	bridge.addplayermoney(src, 'cash', pay)
-	debug_print('Mission finished for '..bridge.getplayername(src)..' ('..identifier..') at '..location..'\nHealth: '..health..'\nLoads: '..loads..'\nTime: '..time_taken..'\nPay: '..pay)
+	local debug_msg = 'Mission finished for '..bridge.getplayername(src)..' ('..identifier..') at '..location..'\nHealth: '..health..'\nLoads: '..loads..'\nTime: '..time_taken..'\nPay: '..pay
+	debug_print(debug_msg)
+	log_to_discord(debug_msg)
 	reserve_warehouse(location, identifier, false)
 end
 
