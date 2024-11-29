@@ -12,8 +12,7 @@ local COLOUR <const> = DISCORD.colour
 local IMAGE <const> = DISCORD.image
 local WEBHOOK <const> = DISCORD.webhook
 local PAY <const> = server_config.Pay
-
-local QBCore = exports['qb-core']:GetCoreObject()
+local NOTIFY <const> = config.Notify
 local RES_NAME <const> = GetCurrentResourceName()
 ---@type {peds: integer[], objs: integer[], vehs: integer[], identifiers: {[string]: integer}}
 local Warehouses = {}
@@ -101,7 +100,7 @@ local function create_timer(location, identifier)
 		local limit = PAY[location].time_limit * 1000
 		local time = GetGameTimer()
 		identifiers[identifier] = time
-		print('Timer started for '..identifier..' at '..location, time, limit, GetGameTimer() - time)
+		debug_print('Timer started for '..bridge.getplayername(src)..' ('..identifier..') at '..location)
 		while identifiers[identifier] do
 			Wait(1000)
 			if not is_player_using_warehouse(location, identifier) or math.timer(time, limit) then break end
@@ -147,13 +146,17 @@ local function create_object_cb(player, model, coords, location)
   repeat Wait(100) until DoesEntityExist(obj)
 	local warehouse = Warehouses[location]
 	local ent = Entity(obj)
+	local identifier = bridge.getidentifier(player)
   ent.state:set('forklift:object:init', true, true)
-	ent.state:set('forklift:object:owner', player, true)
+	ent.state:set('forklift:object:owner', identifier, true)
 	ent.state:set('forklift:object:warehouse', location, true)
   SetEntityIgnoreRequestControlFilter(obj, true)
 	warehouse.objs = warehouse.objs or {}
 	warehouse.objs[#warehouse.objs + 1] = obj
-  return NetworkGetNetworkIdFromEntity(obj)
+	repeat Wait(100) until NetworkGetEntityOwner(obj) == player
+	local netID = NetworkGetNetworkIdFromEntity(obj)
+	debug_print('Created object '..netID..' for '..bridge.getplayername(player)..' at '..location)
+  return netID
 end
 
 ---@param model string|integer
@@ -180,8 +183,9 @@ local function create_vehicle_cb(player, model, coords, location, driver)
   repeat Wait(0) until DoesEntityExist(veh)
 	local warehouse = Warehouses[location]
 	local veh_state = Entity(veh).state
+	local identifier = bridge.getidentifier(player)
 	veh_state:set('forklift:vehicle:init', true, true)
-	veh_state:set('forklift:vehicle:owner', player, true)
+	veh_state:set('forklift:vehicle:owner', identifier, true)
 	veh_state:set('forklift:vehicle:warehouse', location, true)
 	SetEntityIgnoreRequestControlFilter(veh, true)
 	warehouse.vehs = warehouse.vehs or {}
@@ -197,7 +201,7 @@ local function create_vehicle_cb(player, model, coords, location, driver)
 		math.seedrng()
 		ped_netID = NetworkGetNetworkIdFromEntity(ped)
 		ped_state:set('forklift:ped:vehicle', netID, true)
-		ped_state:set('forklift:ped:owner', player, true)
+		ped_state:set('forklift:ped:owner', identifier, true)
 		ped_state:set('forklift:ped:warehouse', location, true)
 		veh_state:set('forklift:vehicle:driver', ped_netID, true)
 		veh_state:set('forklift:vehicle:loads', math.random(max_loads), true)
@@ -208,6 +212,7 @@ local function create_vehicle_cb(player, model, coords, location, driver)
 		warehouse.peds[#warehouse.peds + 1] = ped
 	end
 	repeat Wait(100) until NetworkGetEntityOwner(veh) == player
+	debug_print('Created vehicle '..netID..' for '..bridge.getplayername(player)..' at '..location..'\nDriver: '..(ped_netID and ped_netID or 'None'))
 	return netID, ped and ped_netID
 end
 
@@ -226,6 +231,7 @@ local function remove_entity(location, netID)
 		if entites[i] == entity then table.remove(entites, i) break end
 	end
 	TriggerClientEvent('forklift:client:RemoveEntity', -1, location, netID)
+	debug_print('Removed entity '..netID..' from '..bridge.getplayername(src)..' at '..location)
 end
 
 ---@param pay number
@@ -251,8 +257,12 @@ local function finish_mission(location, identifier, health, loads)
 	local time = Warehouses[location].identifiers[identifier]
 	if not time then return end
 	local pay_rates = PAY[location]
-	local pay = get_pay(pay_rates.min_per_pallet, loads, math.floor((GetGameTimer() - time) / 1000), pay_rates.time_limit) * health
-	print('Time: '..time, 'GameTimer: '..GetGameTimer(), 'Difference: '..(GetGameTimer() - time), 'As Secs:'..math.floor((GetGameTimer() - time) / 1000), 'Health Ratio: '..health, 'Loads: '..loads, 'Pay: '..pay)
+	local time_taken = math.floor((GetGameTimer() - time) / 1000)
+	local pay = math.round(get_pay(pay_rates.min_per_pallet, loads, time_taken, pay_rates.time_limit) * health)
+	local msg = health > 0.9 and 'pristine' or health > 0.75 and 'pretty nice' or health > 0.5 and 'alright, I guess' or health > 0.25 and 'pretty shit' or 'loaded at least'
+	NOTIFY(src, 'This product is '..msg..'. It took you '..time_taken..' seconds, I\'ll give you $'..pay, 'success')
+	bridge.addplayermoney(src, 'cash', pay)
+	debug_print('Mission finished for '..bridge.getplayername(src)..' ('..identifier..') at '..location..'\nHealth: '..health..'\nLoads: '..loads..'\nTime: '..time_taken..'\nPay: '..pay)
 	reserve_warehouse(location, identifier, false)
 end
 
@@ -275,15 +285,6 @@ end
 -------------------------------- EVENTS --------------------------------
 AddEventHandler('onResourceStart', init_script)
 AddEventHandler('onResourceStop', deinit_script)
----@param name string
----@param key string
----@param value any
----@param replicated boolean
-AddStateBagChangeHandler('forklift:object:fin', '', function(name, key, value, _, replicated)
-  local obj = GetEntityFromStateBagName(name)
-  if not obj or obj == 0 or not DoesEntityExist(obj) then return end
-  DeleteEntity(obj)
-end)
 
 RegisterServerEvent('forklift:server:ReserveWarehouse', reserve_warehouse)
 RegisterServerEvent('forklift:server:RemoveEntity', remove_entity)
