@@ -1,39 +1,108 @@
+---@diagnostic disable: undefined-global
+local ivec3 = ivec3 --[[@as fun(x: number, y: number, z: number): vector3]] -- Applies integer-casting rules to the input values
+---@diagnostic enable: undefined-global
 local duff = duff
 
 return {
   ---@type boolean
   ['DebugMode'] = false,
-  ---@type {enabled: boolean, type: integer, colour: {r: integer, g: integer, b: integer, a: integer}|vector4, scale: {x: number, y: number, z: number}|vector3}
+  ---@type {enabled: boolean, pallet: {type: number, colour: {r: number, g: number, b: number, a: number}, scale: vector3}, pickup: {type: number, colour: {r: number, g: number, b: number, a: number}, scale: vector3}}
   ['Marker'] = {
     enabled = true,
-    type = 0,
-    colour = {r = 240, g = 160, b = 1, a = 255},
-    scale = {x = 1.0, y = 1.0, z = 1.0}
+    pallet = {
+      type = 0,
+      colour = {r = 240, g = 160, b = 1, a = 255},
+      scale = vector3(1.0, 1.0, 1.0)
+    },
+    pickup = {
+      type = 1,
+      colour = {r = 135, g = 30, b = 35, a = 155},
+      scale = vector3(1.5, 1.5, 1.5)
+    }
   },
-  ---@type string
-  ['FuelSystem'] = 'ps-fuel',
-  ---@type {name: string, coords: vector3, job: string|boolean?, blip: {enabled: boolean, options: blip_options}, Peds: {model: string, coords: vector4, scenario: string, chair: string|number?}[], Garage: {model: string, coords: vector4}, Pickup: {vehicle: string, driver: string, coords: vector4[]}, Pallets: {coords: vector4[], models: string[]}}[]
+  ---@type fun(vehicle: integer)
+  ['Fuel'] = function(vehicle)
+    if IsDuplicityVersion() == 1 then return end
+    exports['ps-fuel']:SetFuel(vehicle, 100.0)
+  end,
+  ---@type fun(plate: string)
+  ['Keys'] = function(plate)
+    if IsDuplicityVersion() == 1 then return end
+    TriggerEvent('vehiclekeys:client:SetOwner', plate)
+  end,
+  ---@type {name: string, coords: vector3, job: string|boolean?, blip: {enabled: boolean, options: {main: blip_options, garage: blip_options, pallet: blip_options, pickup: blip_options}}, Peds: {model: string, coords: vector4, scenario: string, chair: string|number?}[], Garage: {model: string, coords: vector4}, Pickup: {vehicle: string, driver: string, coords: vector4[]}, Pallets: {coords: vector4[], models: string[]}}[]
   ['Locations'] = {
     {
       name = 'Walker Logistics',
       coords = vector3(153.81, -3214.6, 4.93),
-      job = false,
+      job = 'police',
       blip = {
         enabled = true,
         options = {
-          name = 'Walker Logistics',
-          colours = {
-            opacity = 255,
-            primary = 28
+          main = {
+            name = 'Walker Logistics',
+            colours = {
+              opacity = 255,
+              primary = 28
+            },
+            display = {
+              category = 'jobs',
+              display = 'all_select'
+            },
+            style = {
+              sprite = 525,
+              scale = 0.5,
+              short_range = true
+            }
           },
-          display = {
-            category = 'jobs',
-            display = 'all_select'
+          garage = {
+            name = 'Garage',
+            colours = {
+              opacity = 255,
+              primary = 28
+            },
+            display = {
+              category = 'mission',
+              display = 'all_select'
+            },
+            style = {
+              sprite = 357,
+              scale = 0.6,
+              short_range = true
+            },
+            distance = 250.0,
           },
-          style = {
-            sprite = 525,
-            scale = 0.5,
-            short_range = true
+          pallet = {
+            name = 'Pallet',
+            colours = {
+              opacity = 255,
+              primary = 70
+            },
+            display = {
+              category = 'mission',
+              display = 'radar_only'
+            },
+            style = {
+              sprite = 478,
+              scale = 0.8,
+              short_range = true
+            }
+          },
+          pickup = {
+            name = 'Delivery Truck',
+            colours = {
+              opacity = 255,
+              primary = 2
+            },
+            display = {
+              category = 'mission',
+              display = 'radar_only'
+            },
+            style = {
+              sprite = 67,
+              scale = 0.8,
+              short_range = true
+            }
           }
         }
       },
@@ -72,21 +141,21 @@ return {
           vector3(114.89, -3190.58, 6.01),
         },
         models = {
-          'prop_boxpile_01a',
+          -- 'prop_boxpile_01a',
           'prop_boxpile_02b',
           'prop_boxpile_02c',
-          'prop_boxpile_02d',
+          -- 'prop_boxpile_02d',
           'prop_boxpile_03a',
-          'prop_boxpile_04a',
-          'prop_boxpile_05a',
+          -- 'prop_boxpile_04a', too heavy lol
+          -- 'prop_boxpile_05a',
           'prop_boxpile_06a',
-          'prop_boxpile_06b',
+          -- 'prop_boxpile_06b',
           'prop_boxpile_07a',
           'prop_boxpile_07d',
-          'prop_boxpile_08a',
+          -- 'prop_boxpile_08a',
           'prop_boxpile_09a',
-          'prop_boxpile_10a',
-          'prop_boxpile_10b'
+          -- 'prop_boxpile_10a',
+          -- 'prop_boxpile_10b'
         }
       }
     }
@@ -111,10 +180,13 @@ return {
       Core.Functions.Notify(text, types[type] or 'primary', time)
     end
   end,
-  ---@type {enabled: boolean, distance: number, icon: string}
+  ---@type {enabled: boolean, distance: number, icon: {sign_up: string, garage: string}}
   ['Target'] = {
     enabled = true,
     distance = 1.5,
-    icon = 'fas fa-gun'
+    icon = {
+      sign_up = 'fas fa-clipboard-list',
+      garage = 'fas fa-warehouse'
+    }
   }
 }

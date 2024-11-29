@@ -6,10 +6,9 @@ local config = require 'shared.config'
 local DEBUG_MODE <const> = config.DebugMode
 local MARKER <const> = config.Marker
 local MARKER_ENABLED <const> = MARKER.enabled
-local MARKER_TYPE <const> = MARKER.type
-local MARKER_COLOUR <const> = MARKER.colour
-local MARKER_SCALE <const> = MARKER.scale
-local FUEL_SYSTEM <const> = config.FuelSystem
+local PALLET_MARKER <const>, PICKUP_MARKER <const> = MARKER.pallet, MARKER.pickup
+local SET_FUEL <const> = config.Fuel
+local SET_KEYS <const> = config.Keys
 local LOCATIONS <const> = config.Locations
 local TARGET <const> = config.Target
 local USE_TARGET <const> = TARGET.enabled
@@ -46,7 +45,7 @@ local function init_warehouses()
       local main_blip = warehouse.blips.main
       local has_job = not location.job or location.job and bridge.doesplayerhavegroup(nil, location.job --[[@as string|string[]=]])
       if not main_blip and has_job then
-        warehouse.blips.main = iblips:initblip('coord', {coords = coords}, blip_data.options)
+        warehouse.blips.main = iblips:initblip('coord', {coords = coords}, blip_data.options.main)
       else
         iblips:remove(main_blip)
         warehouse.blips.main = nil
@@ -72,23 +71,6 @@ local function is_player_using_warehouse(location)
   return GetStateBagValue('global', 'forklift:warehouse:'..location) == identifier
 end
 
-local PALLET_BLIP <const> = {
-  name = 'Pallet',
-  colours = {
-    opacity = 255,
-    primary = 70
-  },
-  display = {
-    category = 'mission',
-    display = 'radar_only'
-  },
-  style = {
-    sprite = 478,
-    scale = 0.8,
-    short_range = true
-  }
-}
-
 ---@param entity integer The entity ID.
 ---@param condition (fun(entity: integer): boolean?)? The condition to check if the marker should be drawn.
 ---@param position vector3? The position to draw the marker at.
@@ -99,8 +81,11 @@ local function draw_marker(entity, condition, position)
   local coords = position or GetEntityCoords(entity)
   local ply_coords = GetEntityCoords(ped)
   local dist = #(coords - ply_coords)
+  local marker_data = GetEntityType(entity) == 3 and PALLET_MARKER or PICKUP_MARKER
   CreateThread(function()
     local draw = condition and condition(entity) or DoesEntityExist(entity)
+    local mk_type = marker_data.type
+    local scale, colour = marker_data.scale, marker_data.colour
     local sleep = 0
     while draw do
       Wait(sleep)
@@ -111,7 +96,7 @@ local function draw_marker(entity, condition, position)
       if dist <= 15.0 then
         sleep = 0
         ---@diagnostic disable-next-line: param-type-mismatch
-        DrawMarker(MARKER_TYPE, coords.x, coords.y, coords.z + 2.5, 0, 0, 0, 0, 0, 0, MARKER_SCALE.x, MARKER_SCALE.y, MARKER_SCALE.z, MARKER_COLOUR.r, MARKER_COLOUR.g, MARKER_COLOUR.b, MARKER_COLOUR.a, true, true, 2, false, nil, nil, false)
+        DrawMarker(mk_type, coords.x, coords.y, coords.z + 2.5, 0, 0, 0, 0, 0, 0, scale.x, scale.y, scale.z, colour.r, colour.g, colour.b, colour.a, true, true, 2, false, nil, nil, false)
       else
         sleep = 1000
       end
@@ -132,6 +117,7 @@ local function setup_mission_obj(obj, initiate, cancelled, sync_state)
   local warehouse = Warehouses[location]
   local coords = GetEntityCoords(obj)
   local model = GetEntityModel(obj)
+  if LOCATIONS[location].job and not bridge.doesplayerhavegroup(nil, LOCATIONS[location].job --[[@as string|string[]=]]) then return end
   if initiate then
     if not NetworkDoesEntityExistWithNetworkId(netID) then return end
     warehouse.objs = warehouse.objs or {}
@@ -145,7 +131,7 @@ local function setup_mission_obj(obj, initiate, cancelled, sync_state)
     SetEntityCanBeDamaged(obj, true)
     SetEntityDynamic(obj, true)
     warehouse.blips.objs = warehouse.blips.objs or {}
-    warehouse.blips.objs[#warehouse.blips.objs + 1] = iblips:initblip('entity', {entity = obj}, PALLET_BLIP)
+    warehouse.blips.objs[#warehouse.blips.objs + 1] = iblips:initblip('entity', {entity = obj}, LOCATIONS[location].blip.options.pallet)
     draw_marker(obj)
   else
     local ent = Entity(obj)
@@ -188,23 +174,6 @@ local function get_owned_vehicle(location)
   if veh and DoesEntityExist(veh) and Entity(veh).state['forklift:vehicle:owner'] == server_id then return veh end
 end
 
-local PICKUP_BLIP <const> = {
-  name = 'Drop Off',
-  colours = {
-    opacity = 255,
-    primary = 2
-  },
-  display = {
-    category = 'mission',
-    display = 'radar_only'
-  },
-  style = {
-    sprite = 67,
-    scale = 0.8,
-    short_range = true
-  }
-}
-
 ---@param vehicle integer
 ---@param plate string
 ---@param is_ai boolean?
@@ -217,8 +186,8 @@ local function init_vehicle(vehicle, plate, is_ai)
   SetVehicleNumberPlateText(vehicle, plate)
   SetVehicleEngineOn(vehicle, true, false, false)
   if not is_ai then
-    exports[FUEL_SYSTEM]:SetFuel(vehicle, 100.0)
-    TriggerEvent('vehiclekeys:client:SetOwner', plate)
+    SET_FUEL(vehicle)
+    SET_KEYS(plate)
   else
     N_0x6ebfb22d646ffc18(vehicle, false)
     N_0x182f266c2d9e2beb(vehicle, 250.0)
@@ -235,7 +204,7 @@ local function setup_vehicle(location, initiate)
   local garage = warehouse.Garage
   local model = garage.model
   local coords = garage.coords
-  if not is_player_using_warehouse(location) then NOTIFY(nil, 'Someone is already doing this order!', 'error') return end
+  if not is_player_using_warehouse(location) and not get_owned_vehicle(location) then return end
   if job and not bridge.doesplayerhavegroup(nil, job --[[@as string|string[]=]]) then NOTIFY(nil, 'You are not a '..job..'...', 'error') return end
   local ped = PlayerPedId()
   if initiate then
@@ -334,8 +303,9 @@ end
 ---@param vehicle integer
 ---@return vector3 coords
 local function get_boot_coords(vehicle)
+  local min, max = GetModelDimensions(GetEntityModel(vehicle))
   local coords = GetWorldPositionOfEntityBone(vehicle, GetEntityBoneIndexByName(vehicle, 'boot'))
-  return GetOffsetFromCoordAndHeadingInWorldCoords(coords.x, coords.y, coords.z, GetEntityHeading(vehicle), 0.0, -1.0, 0.0)
+  return GetOffsetFromCoordAndHeadingInWorldCoords(coords.x, coords.y, coords.z, GetEntityHeading(vehicle), 0.0, -1.0, 0.5 + -(max.z - min.z))
 end
 
 ---@param coords vector3
@@ -402,12 +372,12 @@ local function await_load(location, coords, driver, vehicle, loads)
     local healths = {}
     draw_marker(vehicle, function(entity) return GetVehicleDoorAngleRatio(entity, 5) >= 0.75 end, dr_coords)
     repeat
-      Wait(1000)
+      Wait(500)
       if not DoesEntityExist(pallet) then pallet = get_owned_object(location) end
       if not pallet then break end
       plt_coords = GetEntityCoords(pallet)
       dist = #(dr_coords - plt_coords)
-      if dist <= 2.0 then
+      if dist <= 3.0 then
         healths[#healths + 1] = get_damage_ratio(pallet)
         setup_mission_obj(pallet, false, false, true)
         delivered += 1
@@ -561,7 +531,7 @@ local function catch_ped_state(name, key, value, _, replicated)
     {
       name = 'forklift_'..wh_type:lower()..'_target_'..wh_key,
       label = is_start and 'Take Order' or 'Take Forklift',
-      icon = is_start and 'fas fa-truck-fast' or 'fas fa-warehouse',
+      icon = TARGET_ICON[wh_type],
       onSelect = function()
         if is_start then
           TriggerEvent('forklift:client:SetupOrder', wh_key, true, false)
@@ -581,7 +551,7 @@ local function catch_ped_state(name, key, value, _, replicated)
     {
       name = 'forklift_'..wh_type:lower()..'_target_cancel_'..wh_key,
       label = is_start and 'Cancel Order' or 'Return Forklift',
-      icon = 'fas fa-sign-out-alt',
+      icon = TARGET_ICON[wh_type],
       onSelect = function()
         if is_start then
           TriggerEvent('forklift:client:SetupOrder', wh_key, false, true)
@@ -609,24 +579,6 @@ local function does_warehouse_require_job(location)
   return warehouse.job and warehouse.job
 end
 
-local GARAGE_BLIP <const> = {
-  name = 'Forklift',
-  colours = {
-    opacity = 255,
-    primary = 28
-  },
-  display = {
-    category = 'mission',
-    display = 'all_select'
-  },
-  style = {
-    sprite = 357,
-    scale = 0.6,
-    short_range = true
-  },
-  distance = 250.0,
-}
-
 ---@param location integer
 ---@param initiate boolean
 ---@param cancelled boolean
@@ -652,7 +604,7 @@ local function setup_order(location, initiate, cancelled)
     local pnt, mdl = pnts[rdm_a], mdls[rdm_b]
     print('Pallet Model:', mdl)
     create_object(mdl, pnt, location)
-    wrh_data.blips.garage = iblips:initblip('coord', {coords = warehouse.Garage.coords.xyz}, GARAGE_BLIP)
+    wrh_data.blips.garage = iblips:initblip('coord', {coords = warehouse.Garage.coords.xyz}, warehouse.blip.options.garage)
     NOTIFY(nil, 'Delivery is marked...', 'success', 2500)
     Wait(1000)
     ClearPedTasks(ped)
@@ -692,7 +644,8 @@ local function catch_driver_state(name, key, value, _, replicated)
   local veh = GetEntityFromStateBagName(name)
   if not veh or veh == 0 or not DoesEntityExist(veh) or not catch_entity(veh) then return end
   local location = GetStateBagValue(name, 'forklift:vehicle:warehouse') --[[@as integer]]
-  Warehouses[location].blips.pickup = iblips:initblip('vehicle', {vehicle = veh}, PICKUP_BLIP)
+  if LOCATIONS[location].job and not bridge.doesplayerhavegroup(nil, LOCATIONS[location].job --[[@as string|string[]=]]) then return end
+  Warehouses[location].blips.pickup = iblips:initblip('vehicle', {vehicle = veh}, LOCATIONS[location].blip.options.pickup)
 end
 
 ---@param location integer
@@ -715,7 +668,10 @@ local function remove_entity(location, netID)
     warehouse.blips.pickup = nil
     table.wipe(warehouse.pickup)
   end
-  if DoesEntityExist(entity) then DeleteEntity(entity) end
+  if DoesEntityExist(entity) then
+    SetEntityAsMissionEntity(entity, true, true)
+    DeleteEntity(entity)
+  end
 end
 
 ---@param entity integer?
