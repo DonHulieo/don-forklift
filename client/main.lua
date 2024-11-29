@@ -11,6 +11,10 @@ local MARKER_COLOUR <const> = MARKER.colour
 local MARKER_SCALE <const> = MARKER.scale
 local FUEL_SYSTEM <const> = config.FuelSystem
 local LOCATIONS <const> = config.Locations
+local TARGET <const> = config.Target
+local USE_TARGET <const> = TARGET.enabled
+local TARGET_DIST <const> = TARGET.distance
+local TARGET_ICON <const> = TARGET.icon
 local NOTIFY = config.Notify
 local LOAD_EVENT <const>, UNLOAD_EVENT <const>, JOB_EVENT <const> = bridge['_DATA']['EVENTS'].LOAD, bridge['_DATA']['EVENTS'].UNLOAD, bridge['_DATA']['EVENTS'].JOBDATA
 local RES_NAME <const> = GetCurrentResourceName()
@@ -331,8 +335,7 @@ end
 ---@return vector3 coords
 local function get_boot_coords(vehicle)
   local coords = GetWorldPositionOfEntityBone(vehicle, GetEntityBoneIndexByName(vehicle, 'boot'))
-  print(coords, GetOffsetFromCoordAndHeadingInWorldCoords(coords.x, coords.y, coords.z, GetEntityHeading(vehicle), 0.0, -0.5, 0.0))
-  return GetOffsetFromCoordAndHeadingInWorldCoords(coords.x, coords.y, coords.z, GetEntityHeading(vehicle), 0.0, -0.5, 0.0)
+  return GetOffsetFromCoordAndHeadingInWorldCoords(coords.x, coords.y, coords.z, GetEntityHeading(vehicle), 0.0, -1.0, 0.0)
 end
 
 ---@param coords vector3
@@ -489,6 +492,7 @@ local function deinit_script(resource)
   for i = 1, #LOCATIONS do
     local location = LOCATIONS[i]
     local warehouse = Warehouses[i]
+    if USE_TARGET then bridge.removezone('forklift_sign_up_target_'..i); bridge.removezone('forklift_garage_target_'..i) end
     if location.blip.enabled and warehouse.blips.main then iblips:remove(warehouse.blips.main) end
     if warehouse.blips?.garage then iblips:remove(warehouse.blips.garage) end
     if warehouse.blips?.objs then
@@ -571,7 +575,8 @@ local function catch_ped_state(name, key, value, _, replicated)
         else
           return is_any_player_using_warehouse(wh_key) and get_owned_vehicle(wh_key) == nil
         end
-      end
+      end,
+      distance = TARGET_DIST
     },
     {
       name = 'forklift_'..wh_type:lower()..'_target_cancel_'..wh_key,
@@ -590,7 +595,8 @@ local function catch_ped_state(name, key, value, _, replicated)
         else
           return get_owned_vehicle(wh_key) ~= nil
         end
-      end
+      end,
+      distance = TARGET_DIST
     }
   })
 end
