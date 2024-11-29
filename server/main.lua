@@ -1,5 +1,5 @@
 local duff = duff
-local bridge, interval, require = duff.bridge, duff.interval, duff.package.require
+local bridge, interval, math, require = duff.bridge, duff.interval, duff.math, duff.package.require
 ---@module 'don-forklift.shared.config'
 local config = require 'shared.config'
 local DEBUG_MODE <const> = config.DebugMode
@@ -15,7 +15,7 @@ local PAY <const> = server_config.Pay
 
 local QBCore = exports['qb-core']:GetCoreObject()
 local RES_NAME <const> = GetCurrentResourceName()
----@type {peds: integer[], objs: integer[], vehs: integer[]}
+---@type {peds: integer[], objs: integer[], vehs: integer[], identifiers: {[string]: integer}}
 local Warehouses = {}
 
 -------------------------------- FUNCTIONS --------------------------------
@@ -78,6 +78,7 @@ local function deinit_script(resource)
 		end
 		GlobalState:set('forklift:warehouse:'..i, nil, true)
 		GlobalState:set('forklift:warehouse:'..i..':last', nil, true)
+		table.wipe(warehouse)
 	end
 end
 
@@ -93,12 +94,19 @@ local function create_timer(location, identifier)
 	local src = source
 	if not LOCATIONS[location] then return end
 	local warehouse = Warehouses[location]
-	if warehouse[identifier] then return end
+	warehouse.identifiers = warehouse.identifiers or {}
+	local identifiers = warehouse.identifiers
+	if identifiers[identifier] then return end
 	CreateThread(function()
-		local limit = PAY[location].time_limit
-		warehouse[identifier] = GetGameTimer()
-		repeat Wait(1000) until not warehouse[identifier] or not is_player_using_warehouse(location, identifier) or GetGameTimer() - warehouse[identifier] >= limit
-		TriggerClientEvent('forklift:client:SetupOrder', src, location, false, true)
+		local limit = PAY[location].time_limit * 1000
+		local time = GetGameTimer()
+		identifiers[identifier] = time
+		print('Timer started for '..identifier..' at '..location, time, limit, GetGameTimer() - time)
+		while identifiers[identifier] do
+			Wait(1000)
+			if not is_player_using_warehouse(location, identifier) or math.timer(time, limit) then break end
+		end
+		if math.timer(time, limit) then TriggerClientEvent('forklift:client:SetupOrder', src, location, false, true) end
 	end)
 end
 
@@ -114,7 +122,7 @@ local function reserve_warehouse(warehouse, identifier, reserve)
 	GlobalState:set('forklift:warehouse:'..warehouse, reserve and identifier or nil, true)
 	if not reserve then
 		GlobalState:set('forklift:warehouse:'..warehouse..':last', identifier, true)
-		Warehouses[warehouse][identifier] = nil
+		Warehouses[warehouse].identifiers[identifier] = nil
 	else
 		create_timer(warehouse, identifier)
 	end
@@ -137,13 +145,14 @@ local function create_object_cb(player, model, coords, location)
 	if not is_player_using_warehouse(GetClosestWarehouse(GetPlayerPed(player)), bridge.getidentifier(player)) then return end -- Possible exploit banning
   local obj = CreateObjectNoOffset(hash_model(model), coords.x, coords.y, coords.z, true, false, false)
   repeat Wait(100) until DoesEntityExist(obj)
+	local warehouse = Warehouses[location]
 	local ent = Entity(obj)
-  Entity(obj).state:set('forklift:object:init', true, true)
-	Entity(obj).state:set('forklift:object:owner', player, true)
-	Entity(obj).state:set('forklift:object:warehouse', location, true)
+  ent.state:set('forklift:object:init', true, true)
+	ent.state:set('forklift:object:owner', player, true)
+	ent.state:set('forklift:object:warehouse', location, true)
   SetEntityIgnoreRequestControlFilter(obj, true)
-	Warehouses[location].objs = Warehouses[location].objs or {}
-	Warehouses[location].objs[#Warehouses[location].objs + 1] = obj
+	warehouse.objs = warehouse.objs or {}
+	warehouse.objs[#warehouse.objs + 1] = obj
   return NetworkGetNetworkIdFromEntity(obj)
 end
 
@@ -169,29 +178,36 @@ local function create_vehicle_cb(player, model, coords, location, driver)
 	local veh_type = get_vehicle_type(model)
 	local veh = CreateVehicleServerSetter(model, veh_type, coords.x, coords.y, coords.z, coords.w or 0)
   repeat Wait(0) until DoesEntityExist(veh)
+	local warehouse = Warehouses[location]
 	local veh_state = Entity(veh).state
 	veh_state:set('forklift:vehicle:init', true, true)
 	veh_state:set('forklift:vehicle:owner', player, true)
 	veh_state:set('forklift:vehicle:warehouse', location, true)
 	SetEntityIgnoreRequestControlFilter(veh, true)
-	Warehouses[location].vehs = Warehouses[location].vehs or {}
-	Warehouses[location].vehs[#Warehouses[location].vehs + 1] = veh
+	warehouse.vehs = warehouse.vehs or {}
+	warehouse.vehs[#warehouse.vehs + 1] = veh
 	local netID = NetworkGetNetworkIdFromEntity(veh)
-	local ped = driver and CreatePed(4, model, coords.x, coords.y, coords.z, coords.w, true, true)
+	local ped = driver and CreatePed(4, driver, coords.x, coords.y, coords.z, coords.w, true, true)
 	local ped_netID
+	player = tonumber(player) --[[@as integer]]
 	if ped then
 		repeat Wait(0) until DoesEntityExist(ped)
+		local max_loads = PAY[location].max_loads
 		local ped_state = Entity(ped).state
+		math.seedrng()
 		ped_netID = NetworkGetNetworkIdFromEntity(ped)
 		ped_state:set('forklift:ped:vehicle', netID, true)
 		ped_state:set('forklift:ped:owner', player, true)
 		ped_state:set('forklift:ped:warehouse', location, true)
 		veh_state:set('forklift:vehicle:driver', ped_netID, true)
+		veh_state:set('forklift:vehicle:loads', math.random(max_loads), true)
+		repeat Wait(100) until NetworkGetEntityOwner(ped) == player
 		SetPedRandomComponentVariation(ped, 0)
 		SetVehicleDoorsLocked(veh, 3)
 		SetEntityIgnoreRequestControlFilter(ped, true)
-		Warehouses[location].peds[#Warehouses[location].peds + 1] = ped
+		warehouse.peds[#warehouse.peds + 1] = ped
 	end
+	repeat Wait(100) until NetworkGetEntityOwner(veh) == player
 	return netID, ped and ped_netID
 end
 
@@ -230,12 +246,14 @@ local function finish_mission(location, identifier, health, loads)
 	local src = source
 	if not bridge.getplayer(src) then return end
 	if identifier ~= bridge.getidentifier(src) then return end -- Possible exploit banning
-	if not is_player_using_warehouse(location, identifier) then return end -- Possible exploit banning
-	local time = Warehouses[location][identifier]
+	if not is_player_using_warehouse(location, identifier) then print('signed out') return end -- Possible exploit banning
+	if health > 1.0 then return end -- Health can't possibly be higher than 1.0, possible exploit banning
+	local time = Warehouses[location].identifiers[identifier]
 	if not time then return end
 	local pay_rates = PAY[location]
 	local pay = get_pay(pay_rates.min_per_pallet, loads, math.floor((GetGameTimer() - time) / 1000), pay_rates.time_limit) * health
-	print('Time: '..time, 'GameTimer: '..GetGameTimer(), 'Difference: '..(GetGameTimer() - time), 'As Secs:'..math.floor((GetGameTimer() - time) / 1000), 'Health Ratio: '..health, 'Pay: '..pay)
+	print('Time: '..time, 'GameTimer: '..GetGameTimer(), 'Difference: '..(GetGameTimer() - time), 'As Secs:'..math.floor((GetGameTimer() - time) / 1000), 'Health Ratio: '..health, 'Loads: '..loads, 'Pay: '..pay)
+	reserve_warehouse(location, identifier, false)
 end
 
 ---@param entity integer
