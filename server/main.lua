@@ -170,7 +170,7 @@ end
 
 ---@param player string|integer
 ---@param model string
----@param coords vector3
+---@param coords vector4
 ---@param location integer
 ---@return integer? object
 local function create_object_cb(player, model, coords, location)
@@ -190,6 +190,7 @@ local function create_object_cb(player, model, coords, location)
 	repeat Wait(100) until NetworkGetEntityOwner(obj) == player
 	local netID = NetworkGetNetworkIdFromEntity(obj)
 	debug_print('Created object '..netID..' for '..bridge.getplayername(player)..' at '..location)
+	SetEntityHeading(obj, coords.w)
   return netID
 end
 
