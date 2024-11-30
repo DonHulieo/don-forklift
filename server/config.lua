@@ -14,12 +14,15 @@ return {
     {
       min_per_pallet = 50,
       time_limit = 300,
-      max_loads = 5
-    },
-    {
+      max_loads = 1
+    }, {
       min_per_pallet = 50,
       time_limit = 450,
-      max_loads = 5
+      max_loads = 1
+    }, {
+      min_per_pallet = 75,
+      time_limit = 180,
+      max_loads = 1
     }
   }
 }

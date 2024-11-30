@@ -5,7 +5,7 @@ local duff = duff
 
 return {
   ---@type boolean
-  ['DebugMode'] = false,
+  ['DebugMode'] = true,
   ---@type {enabled: boolean, pallet: {type: number, colour: {r: number, g: number, b: number, a: number}, scale: vector3}, pickup: {type: number, colour: {r: number, g: number, b: number, a: number}, scale: vector3}}
   ['Marker'] = {
     enabled = true,
@@ -35,7 +35,7 @@ return {
     {
       name = 'Walker Logistics',
       coords = vector3(153.81, -3214.6, 4.93),
-      job = 'ambulance',
+      job = 'police',
       blip = {
         enabled = true,
         options = {
@@ -84,7 +84,7 @@ return {
             style = {
               sprite = 478,
               scale = 0.8,
-              short_range = true
+              -- short_range = true
             }
           },
           pickup = {
@@ -148,7 +148,7 @@ return {
           'prop_boxpile_09a'
         }
       }
-    },     {
+    }, {
       name = 'Pacific Shipyard',
       coords = vector3(17.89, -2665.12, 5.01),
       job = 'police',
@@ -200,7 +200,7 @@ return {
             style = {
               sprite = 478,
               scale = 0.8,
-              short_range = true
+              -- short_range = true
             }
           },
           pickup = {
@@ -253,6 +253,120 @@ return {
           vector3(-100.63, -2647.36, 6.02),
           vector3(38.79, -2678.8, 6.01),
           vector3(-83.72, -2655.93, 6.0)
+        },
+        models = {
+          'prop_boxpile_02b',
+          'prop_boxpile_02c',
+          'prop_boxpile_03a',
+          'prop_boxpile_06a',
+          'prop_boxpile_07a',
+          'prop_boxpile_07d'
+        }
+      }
+    }, {
+      name = 'PostOp Warehouse',
+      coords = vector3(-424.23, -2789.92, 5.53),
+      job = 'police',
+      blip = {
+        enabled = true,
+        options = {
+          main = {
+            name = 'PostOp Warehouse',
+            colours = {
+              opacity = 255,
+              primary = 28
+            },
+            display = {
+              category = 'jobs',
+              display = 'all_select'
+            },
+            style = {
+              sprite = 525,
+              scale = 0.5,
+              short_range = true
+            }
+          },
+          garage = {
+            name = 'Garage',
+            colours = {
+              opacity = 255,
+              primary = 28
+            },
+            display = {
+              category = 'mission',
+              display = 'all_select'
+            },
+            style = {
+              sprite = 357,
+              scale = 0.6,
+              short_range = true
+            },
+            distance = 250.0,
+          },
+          pallet = {
+            colours = {
+              opacity = 255,
+              primary = 70
+            },
+            display = {
+              category = 'mission',
+              display = 'radar_only'
+            },
+            style = {
+              sprite = 478,
+              scale = 0.8,
+              -- short_range = true
+            }
+          },
+          pickup = {
+            colours = {
+              opacity = 255,
+              primary = 2
+            },
+            display = {
+              category = 'mission',
+              display = 'radar_only'
+            },
+            style = {
+              sprite = 67,
+              scale = 0.8,
+              short_range = true
+            }
+          }
+        }
+      },
+      ['Peds'] = {
+        { -- Sign In
+          model = `s_m_m_ups_01`,
+          coords = vector4(-424.43, -2789.89, 6.53, 320.0),
+          scenario = 'WORLD_HUMAN_CLIPBOARD_FACILITY'
+        }, { -- Garage
+          model = `s_m_m_ups_02`,
+          coords = vector4(-419.25, -2763.05, 5.93, 177.47),
+          scenario = 'WORLD_HUMAN_STAND_MOBILE_UPRIGHT'
+        }
+      },
+      ['Garage'] = {
+        model = `forklift`,
+        coords = vector4(-423.85, -2762.1, 5.95, 180.1)
+      },
+      ['Pickup'] = {
+        vehicle = `boxville4`,
+        driver = `s_m_m_security_01`,
+        coords = {
+          vector4(-197.98, -2598.65, 6.0, 176.56), -- Start
+          vector4(-521.68, -2826.88, 5.44, 41.14) -- Stop
+        }
+      },
+      ['Pallets'] = {
+        coords = {
+          vector3(-473.39, -2787.66, 6.0),
+          vector3(-462.45, -2776.23, 6.0),
+          vector3(-373.18, -2780.15, 6.0),
+          vector3(-547.09, -2852.51, 6.0),
+          vector3(-503.8, -2858.56, 7.3),
+          vector3(-416.02, -2855.62, 6.0),
+          vector3(-404.9, -2844.28, 6.0)
         },
         models = {
           'prop_boxpile_02b',
