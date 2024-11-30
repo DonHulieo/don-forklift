@@ -88,26 +88,29 @@ local function draw_marker(entity, condition, position)
   local ply_coords = GetEntityCoords(ped)
   local dist = #(coords - ply_coords)
   local marker_data = GetEntityType(entity) == 3 and PALLET_MARKER or PICKUP_MARKER
+  local function draw()
+    if not condition then return DoesEntityExist(entity) == 1 end
+    return condition(entity)
+  end
   CreateThread(function()
-    local draw = condition and condition(entity) or DoesEntityExist(entity)
     local location = GetClosestWarehouse(ped)
     local mk_type = marker_data.type
     local scale, colour = marker_data.scale, marker_data.colour
     local sleep = 0
-    while draw do
+    while draw() do
       Wait(sleep)
       coords, ply_coords = position or GetEntityCoords(entity), GetEntityCoords(ped)
+      coords = not position and vector3(coords.x, coords.y, coords.z + 2.5) or coords
       dist = #(coords - ply_coords)
       if not isLoggedIn then return end
       if not is_player_using_warehouse(location) then return end
       if dist <= 15.0 then
         sleep = 0
         ---@diagnostic disable-next-line: param-type-mismatch
-        DrawMarker(mk_type, coords.x, coords.y, coords.z + 2.5, 0, 0, 0, 0, 0, 0, scale.x, scale.y, scale.z, colour.r, colour.g, colour.b, colour.a, true, true, 2, false, nil, nil, false)
+        DrawMarker(mk_type, coords.x, coords.y, coords.z, 0, 0, 0, 0, 0, 0, scale.x, scale.y, scale.z, colour.r, colour.g, colour.b, colour.a, true, true, 2, false, nil, nil, false)
       else
         sleep = 1000
       end
-      draw = condition and condition(entity) or DoesEntityExist(entity)
     end
   end)
 end
@@ -208,12 +211,13 @@ local function setup_vehicle(location, initiate)
   local garage = warehouse.Garage
   local model = garage.model
   local coords = garage.coords
+  local veh = get_owned_vehicle(location)
   if not is_player_using_warehouse(location) and not get_owned_vehicle(location) then return end
   if job and not bridge.doesplayerhavegroup(nil, job --[[@as string|string[]=]]) then NOTIFY(nil, 'You are not a '..job..'...', 'error') return end
   local ped = PlayerPedId()
   if initiate then
-    bridge.triggercallback(nil, 'forklift:server:CreateVehicle', function(net_id)
-      local veh = NetToVeh(net_id)
+    bridge.triggercallback(nil, 'forklift:server:CreateVehicle', function(netID)
+      veh = NetToVeh(netID)
       local plate = 'FORK'..tostring(math.random(1000, 9999))
       Warehouses[location].garage.veh = veh
       init_vehicle(veh, plate)
@@ -221,7 +225,6 @@ local function setup_vehicle(location, initiate)
       NOTIFY(nil, 'Forklift retrieved from garage...', 'success')
     end, model, coords, location)
   else
-    local veh = get_owned_vehicle(location)
     if veh then
       if GetVehiclePedIsIn(ped, false) == veh then
         SetVehicleEngineOn(veh, false, false, false)
@@ -230,6 +233,7 @@ local function setup_vehicle(location, initiate)
       end
       TriggerServerEvent('forklift:server:RemoveEntity', location, VehToNet(veh))
       NOTIFY(nil, 'Forklift returned to garage...', 'success')
+      if not not is_player_using_warehouse(location) then iblips:remove(Warehouses[location].blips.garage) end
     else
       NOTIFY(nil, 'You have no forklift to return...', 'error')
     end
@@ -309,9 +313,18 @@ end
 ---@param vehicle integer
 ---@return vector3 coords
 local function get_boot_coords(vehicle)
-  local min, max = GetModelDimensions(GetEntityModel(vehicle))
-  local coords = GetWorldPositionOfEntityBone(vehicle, GetEntityBoneIndexByName(vehicle, 'boot'))
-  return GetOffsetFromCoordAndHeadingInWorldCoords(coords.x, coords.y, coords.z, GetEntityHeading(vehicle), 0.0, -1.0, 0.5 + -(max.z - min.z))
+  local height = 0.0
+  local coords = vector3(0.0, 0.0, 0.0)
+  if GetIsDoorValid(vehicle, 5) then
+    coords = GetWorldPositionOfEntityBone(vehicle, GetEntityBoneIndexByName(vehicle, 'boot'))
+  else
+    local rr_l, rr_r = GetEntryPositionOfDoor(vehicle, 2), GetEntryPositionOfDoor(vehicle, 3)
+    local x, y = (rr_l.x + rr_r.x) * 0.5, (rr_l.y + rr_r.y) * 0.5
+    local fnd, z = GetGroundZFor_3dCoord(x, y, rr_l.z, false)
+    coords = vector3(x, y, fnd and z or rr_l.z)
+    height = GetEntityHeightAboveGround(vehicle) * 0.25
+  end
+  return GetOffsetFromCoordAndHeadingInWorldCoords(coords.x, coords.y, coords.z, GetEntityHeading(vehicle), 0.0, -1.0, height)
 end
 
 ---@param coords vector3
@@ -332,7 +345,12 @@ local function deliver_load(location, coords, vehicle, driver)
   if not DoesEntityExist(vehicle) or not DoesEntityExist(driver) then return end
   local netID, ped_netID = VehToNet(vehicle), PedToNet(driver)
   local sequence = init_driving_task(get_random_node(coords, 500.0), vehicle)
-  SetVehicleDoorShut(vehicle, 5, false)
+  if GetIsDoorValid(vehicle, 5) then
+    SetVehicleDoorShut(vehicle, 5, false)
+  else
+    SetVehicleDoorShut(vehicle, 2, false)
+    SetVehicleDoorShut(vehicle, 3, false)
+  end
   TaskPerformSequence(driver, sequence)
   SetPedKeepTask(driver, true)
   await_sequence(driver, sequence, function()
@@ -373,6 +391,7 @@ local function await_load(location, coords, driver, vehicle, loads)
   local plt_coords = GetEntityCoords(pallet)
   local does_entity_exist = DoesEntityExist
   local dr_coords = get_boot_coords(vehicle)
+  local door = GetIsDoorValid(vehicle, 5) and 5 or 3
   local dist = #(dr_coords - plt_coords)
   local warehouse = LOCATIONS[location]
   local Pallets = warehouse.Pallets
@@ -384,7 +403,8 @@ local function await_load(location, coords, driver, vehicle, loads)
     local wh_data = Warehouses[location]
     local delivered = 0
     local healths = {}
-    draw_marker(vehicle, function(entity) return GetVehicleDoorAngleRatio(entity, 5) >= 0.75 end, dr_coords)
+    repeat Wait(500) until GetVehicleDoorAngleRatio(vehicle, door) >= 0.5
+    draw_marker(vehicle, function(entity) return GetVehicleDoorAngleRatio(entity, door) >= 0.75 end, dr_coords)
     repeat
       Wait(500)
       if not DoesEntityExist(pallet) then pallet = get_owned_object(location) end
@@ -401,12 +421,13 @@ local function await_load(location, coords, driver, vehicle, loads)
           local pnt, mdl = pnts[rdm_a], mdls[rdm_b]
           debug_print('Creating Pallet: '..mdl..' at '..pnt)
           setup_mission_obj(NetToObj(create_object(mdl, pnt, location)), true, false)
+          NOTIFY(nil, 'I still need to deliver '..loads - delivered..' more pallets...', 'info')
         end
       end
       cancelled = not is_player_using_warehouse(location)
       exists = does_entity_exist(vehicle)
     until not exists or delivered >= loads or cancelled or not isLoggedIn
-    TriggerServerEvent('forklift:server:FinishMission', location, bridge.getidentifier(), array.foldright(healths, function(a, b) return a + b end, 0) / #healths, loads) -- Pay player based on health (& possibly time taken).
+    if not cancelled and delivered >= loads then TriggerServerEvent('forklift:server:FinishMission', location, bridge.getidentifier(), array.foldright(healths, function(a, b) return a + b end, 0) / #healths, loads) end -- Pay player based on health (& possibly time taken).
     iblips:remove(wh_data.blips.pickup)
     wh_data.blips.pickup = nil
     deliver_load(location, coords, vehicle, driver)
@@ -446,7 +467,12 @@ local function setup_mission_ai(location, initiate, cancelled)
       wh_data.blips.pickup = iblips:initblip('vehicle', {vehicle = veh}, warehouse.blip.options.pickup)
       await_sequence(ped, sequence, function()
         if not DoesEntityExist(veh) or not is_player_using_warehouse(location) then return end
-        SetVehicleDoorOpen(veh, 5, false, false)
+        if GetIsDoorValid(veh, 5) then
+          SetVehicleDoorOpen(veh, 5, false, false)
+        else
+          SetVehicleDoorOpen(veh, 2, false, false)
+          SetVehicleDoorOpen(veh, 3, false, false)
+        end
         NOTIFY(nil, 'The delivery driver has arrived...', 'info')
         await_load(location, start, ped, veh, GetStateBagValue('entity:'..net_id, 'forklift:vehicle:loads') --[[@as integer]])
       end, 4)
@@ -619,7 +645,7 @@ local function setup_order(location, initiate, cancelled)
     local pnt, mdl = pnts[rdm_a], mdls[rdm_b]
     debug_print('Creating Pallet: '..mdl..' at '..pnt)
     setup_mission_obj(NetToObj(create_object(mdl, pnt, location)), true, false)
-    wrh_data.blips.garage = iblips:initblip('coord', {coords = warehouse.Garage.coords.xyz}, warehouse.blip.options.garage)
+    wrh_data.blips.garage = iblips:initblip('coord', {coords = warehouse.Peds[2].coords.xyz}, warehouse.blip.options.garage)
     NOTIFY(nil, 'Delivery is marked...', 'success', 2500)
     Wait(1000)
     ClearPedTasks(ped)
@@ -627,7 +653,7 @@ local function setup_order(location, initiate, cancelled)
     setup_mission_obj(get_owned_object(location) --[[@as integer]], false, cancelled)
     if cancelled then
       if get_owned_vehicle(location) then setup_vehicle(location, false) end
-      NOTIFY(nil, 'Order canceled...', 'error')
+      NOTIFY(nil, 'Order cancelled...', 'error')
       iblips:remove(wrh_data.blips.garage)
       wrh_data.blips.garage = nil
     end
