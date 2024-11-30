@@ -38,6 +38,17 @@ local function get_warehouse_player_is_using()
   end
 end
 
+---@param location integer
+---@param type 'main'|'garage'|'pallet'|'pickup'
+---@return boolean? removed
+local function remove_blip(location, type)
+  if not LOCATIONS[location] then return end
+  local warehouse = Warehouses[location]
+  local blip = warehouse.blips[type]
+  warehouse.blips[type] = nil
+  return iblips:remove(blip)
+end
+
 ---@return table warehouses
 local function init_warehouses()
   for i = 1, #LOCATIONS do
@@ -53,8 +64,7 @@ local function init_warehouses()
       if not main_blip and has_job then
         warehouse.blips.main = iblips:initblip('coord', {coords = coords}, blip_data.options.main)
       else
-        iblips:remove(main_blip)
-        warehouse.blips.main = nil
+        remove_blip(i, 'main')
       end
     end
   end
@@ -233,7 +243,7 @@ local function setup_vehicle(location, initiate)
       end
       TriggerServerEvent('forklift:server:RemoveEntity', location, VehToNet(veh))
       NOTIFY(nil, 'Forklift returned to garage...', 'success')
-      if not not is_player_using_warehouse(location) then iblips:remove(Warehouses[location].blips.garage) end
+      if not not is_player_using_warehouse(location) then remove_blip(location, 'garage') end
     else
       NOTIFY(nil, 'You have no forklift to return...', 'error')
     end
@@ -336,6 +346,26 @@ local function get_random_node(coords, dist)
   return node
 end
 
+---@param vehicle integer
+---@param state boolean
+local function toggle_vehicle_boot(vehicle, state)
+  if GetIsDoorValid(vehicle, 5) then
+    if not state then
+      SetVehicleDoorShut(vehicle, 5, false)
+    else
+      SetVehicleDoorOpen(vehicle, 5, false, false)
+    end
+  else
+    if not state then
+      SetVehicleDoorShut(vehicle, 2, false)
+      SetVehicleDoorShut(vehicle, 3, false)
+    else
+      SetVehicleDoorOpen(vehicle, 2, false, false)
+      SetVehicleDoorOpen(vehicle, 3, false, false)
+    end
+  end
+end
+
 ---@param location integer
 ---@param coords vector3
 ---@param vehicle integer
@@ -345,18 +375,14 @@ local function deliver_load(location, coords, vehicle, driver)
   if not DoesEntityExist(vehicle) or not DoesEntityExist(driver) then return end
   local netID, ped_netID = VehToNet(vehicle), PedToNet(driver)
   local sequence = init_driving_task(get_random_node(coords, 500.0), vehicle)
-  if GetIsDoorValid(vehicle, 5) then
-    SetVehicleDoorShut(vehicle, 5, false)
-  else
-    SetVehicleDoorShut(vehicle, 2, false)
-    SetVehicleDoorShut(vehicle, 3, false)
-  end
+  toggle_vehicle_boot(vehicle, false)
   TaskPerformSequence(driver, sequence)
   SetPedKeepTask(driver, true)
   await_sequence(driver, sequence, function()
     TaskVehicleDriveWander(driver, vehicle, 20.0, 2640055)
     SetPedKeepTask(driver, true)
     SetEntityCleanupByEngine(vehicle, true); SetEntityCleanupByEngine(driver, true)
+    SetEntityAsMissionEntity(vehicle, false, false); SetEntityAsMissionEntity(driver, false, false)
     TriggerServerEvent('forklift:server:RemoveEntity', location, netID); TriggerServerEvent('forklift:server:RemoveEntity', location, ped_netID)
   end)
 end
@@ -380,6 +406,18 @@ local function create_object(model, coords, location)
   return cit_await(p)
 end
 
+---@param models (string|integer)[]
+---@param coords vector4[]
+---@param location integer
+---@return integer object
+local function init_mission_obj(models, coords, location)
+  math.seedrng()
+  local rdm_a, rdm_b = math.random(1, #coords), math.random(1, #models)
+  local pnt, mdl = coords[rdm_a], models[rdm_b]
+  debug_print('Creating Pallet: '..mdl..' at '..pnt)
+  return NetToObj(create_object(mdl, pnt, location))
+end
+
 ---@param location integer
 ---@param coords vector3
 ---@param driver integer
@@ -400,10 +438,9 @@ local function await_load(location, coords, driver, vehicle, loads)
   return await(function()
     local exists = does_entity_exist(vehicle)
     local cancelled = not is_player_using_warehouse(location)
-    local wh_data = Warehouses[location]
     local delivered = 0
     local healths = {}
-    repeat Wait(500) until GetVehicleDoorAngleRatio(vehicle, door) >= 0.5
+    repeat Wait(500) until GetVehicleDoorAngleRatio(vehicle, door) >= 0.75
     draw_marker(vehicle, function(entity) return GetVehicleDoorAngleRatio(entity, door) >= 0.75 end, dr_coords)
     repeat
       Wait(500)
@@ -416,11 +453,7 @@ local function await_load(location, coords, driver, vehicle, loads)
         setup_mission_obj(pallet, false, false)
         delivered += 1
         if delivered < loads then
-          math.seedrng()
-          local rdm_a, rdm_b = math.random(1, #pnts), math.random(1, #mdls)
-          local pnt, mdl = pnts[rdm_a], mdls[rdm_b]
-          debug_print('Creating Pallet: '..mdl..' at '..pnt)
-          setup_mission_obj(NetToObj(create_object(mdl, pnt, location)), true, false)
+          setup_mission_obj(init_mission_obj(mdls, pnts, location), true, false)
           NOTIFY(nil, 'I still need to deliver '..loads - delivered..' more pallets...', 'info')
         end
       end
@@ -428,8 +461,7 @@ local function await_load(location, coords, driver, vehicle, loads)
       exists = does_entity_exist(vehicle)
     until not exists or delivered >= loads or cancelled or not isLoggedIn
     if not cancelled and delivered >= loads then TriggerServerEvent('forklift:server:FinishMission', location, bridge.getidentifier(), array.foldright(healths, function(a, b) return a + b end, 0) / #healths, loads) end -- Pay player based on health (& possibly time taken).
-    iblips:remove(wh_data.blips.pickup)
-    wh_data.blips.pickup = nil
+    remove_blip(location, 'pickup')
     deliver_load(location, coords, vehicle, driver)
   end)
 end
@@ -467,12 +499,7 @@ local function setup_mission_ai(location, initiate, cancelled)
       wh_data.blips.pickup = iblips:initblip('vehicle', {vehicle = veh}, warehouse.blip.options.pickup)
       await_sequence(ped, sequence, function()
         if not DoesEntityExist(veh) or not is_player_using_warehouse(location) then return end
-        if GetIsDoorValid(veh, 5) then
-          SetVehicleDoorOpen(veh, 5, false, false)
-        else
-          SetVehicleDoorOpen(veh, 2, false, false)
-          SetVehicleDoorOpen(veh, 3, false, false)
-        end
+        toggle_vehicle_boot(veh, true)
         NOTIFY(nil, 'The delivery driver has arrived...', 'info')
         await_load(location, start, ped, veh, GetStateBagValue('entity:'..net_id, 'forklift:vehicle:loads') --[[@as integer]])
       end, 4)
@@ -480,8 +507,7 @@ local function setup_mission_ai(location, initiate, cancelled)
   else
     if cancelled then
       NOTIFY(nil, 'Notifying dispatch of cancelled order...', 'info')
-      iblips:remove(wh_data.blips.pickup)
-      wh_data.blips.pickup = nil
+      remove_blip(location, 'pickup')
     end
     local identifier = bridge.getidentifier()
     local veh, driver = get_owned_pickup(location)
@@ -504,14 +530,15 @@ local function deinit_script(resource)
     local location = LOCATIONS[i]
     local warehouse = Warehouses[i]
     if USE_TARGET then bridge.removezone('forklift_sign_up_target_'..i); bridge.removezone('forklift_garage_target_'..i) end
-    if location.blip.enabled and warehouse.blips.main then iblips:remove(warehouse.blips.main) end
-    if warehouse.blips?.garage then iblips:remove(warehouse.blips.garage) end
+    if location.blip.enabled and warehouse.blips.main then remove_blip(i, 'main') end
+    if warehouse.blips?.garage then remove_blip(i, 'garage') end
     if warehouse.blips?.objs then
-      for j = 1, #warehouse.blips.objs do
+      for j = #warehouse.blips.objs, 1, -1 do
         iblips:remove(warehouse.blips.objs[j])
+        table.remove(warehouse.blips.objs, j)
       end
     end
-    if warehouse.blips?.pickup then iblips:remove(warehouse.blips.pickup) end
+    if warehouse.blips?.pickup then remove_blip(i, 'pickup') end
     if is_player_using_warehouse(i) then TriggerServerEvent('forklift:server:ReserveWarehouse', location, bridge.getidentifier(), false) end
     table.wipe(warehouse)
   end
@@ -636,15 +663,10 @@ local function setup_order(location, initiate, cancelled)
   setup_mission_ai(location, initiate, cancelled)
   if initiate then
     local job = does_warehouse_require_job(location)
-    if job and not bridge.doesplayerhavegroup(nil, job --[[@as string|string[]=]]) then NOTIFY(nil, 'You are not a '..job..'...', 'error') return end
     local pallets = warehouse.Pallets
-    local pnts, mdls = pallets.coords, pallets.models
-    math.seedrng()
+    if job and not bridge.doesplayerhavegroup(nil, job --[[@as string|string[]=]]) then NOTIFY(nil, 'You are not a '..job..'...', 'error') return end
     TaskStartScenarioInPlace(ped, 'WORLD_HUMAN_CLIPBOARD', 0, true)
-    local rdm_a, rdm_b = math.random(1, #pnts), math.random(1, #mdls)
-    local pnt, mdl = pnts[rdm_a], mdls[rdm_b]
-    debug_print('Creating Pallet: '..mdl..' at '..pnt)
-    setup_mission_obj(NetToObj(create_object(mdl, pnt, location)), true, false)
+    setup_mission_obj(init_mission_obj(pallets.models, pallets.coords, location), true, false)
     wrh_data.blips.garage = iblips:initblip('coord', {coords = warehouse.Peds[2].coords.xyz}, warehouse.blip.options.garage)
     NOTIFY(nil, 'Delivery is marked...', 'success', 2500)
     Wait(1000)
@@ -654,8 +676,7 @@ local function setup_order(location, initiate, cancelled)
     if cancelled then
       if get_owned_vehicle(location) then setup_vehicle(location, false) end
       NOTIFY(nil, 'Order cancelled...', 'error')
-      iblips:remove(wrh_data.blips.garage)
-      wrh_data.blips.garage = nil
+      remove_blip(location, 'garage')
     end
   end
 end
@@ -676,8 +697,7 @@ local function remove_entity(location, netID)
     end
   end
   if warehouse.pickup and warehouse.pickup.veh == entity then
-    iblips:remove(warehouse.blips.pickup)
-    warehouse.blips.pickup = nil
+    remove_blip(location, 'pickup')
     table.wipe(warehouse.pickup)
   end
   if DoesEntityExist(entity) then
