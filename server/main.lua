@@ -1,5 +1,5 @@
 local duff = duff
-local bridge, math, require = duff.bridge, duff.math, duff.package.require
+local bridge, check_version, math, require = duff.bridge, duff.checkversion, duff.math, duff.package.require
 ---@module 'don-forklift.shared.config'
 local config = require 'shared.config'
 local DEBUG_MODE <const> = config.DebugMode
@@ -53,6 +53,10 @@ local function init_script(resource)
 			warehouse.peds[#warehouse.peds + 1] = create_ped(ped_data.model, ped_data.coords, i, j == 1 and 'sign_up' or 'garage')
 		end
 	end
+	SetTimeout(2000, function()
+		local version = GetResourceMetadata(RES_NAME, 'version', 0)
+		check_version(RES_NAME, version, 'donhulieo', 'don-forklift')
+	end)
 end
 
 ---@param resource string?
