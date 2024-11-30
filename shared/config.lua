@@ -35,7 +35,7 @@ return {
     {
       name = 'Walker Logistics',
       coords = vector3(153.81, -3214.6, 4.93),
-      job = 'police',
+      job = false,
       blip = {
         enabled = true,
         options = {
@@ -151,7 +151,7 @@ return {
     }, {
       name = 'Pacific Shipyard',
       coords = vector3(17.89, -2665.12, 5.01),
-      job = 'police',
+      job = false,
       blip = {
         enabled = true,
         options = {
@@ -264,14 +264,14 @@ return {
         }
       }
     }, {
-      name = 'PostOp Warehouse',
+      name = 'PostOp Depository',
       coords = vector3(-424.23, -2789.92, 5.53),
       job = 'police',
       blip = {
         enabled = true,
         options = {
           main = {
-            name = 'PostOp Warehouse',
+            name = 'PostOp Depository',
             colours = {
               opacity = 255,
               primary = 28
@@ -360,21 +360,19 @@ return {
       },
       ['Pallets'] = {
         coords = {
-          vector3(-473.39, -2787.66, 6.0),
-          vector3(-462.45, -2776.23, 6.0),
-          vector3(-373.18, -2780.15, 6.0),
-          vector3(-547.09, -2852.51, 6.0),
-          vector3(-503.8, -2858.56, 7.3),
-          vector3(-416.02, -2855.62, 6.0),
-          vector3(-404.9, -2844.28, 6.0)
+          vector4(-440.67, -2795.54, 6.3, 135.0),
+          vector4(-449.56, -2804.41, 6.3, 135.0),
+          vector4(-458.51, -2813.45, 6.3, 135.0),
+          vector4(-476.53, -2831.43, 6.3, 135.0),
+          vector4(-494.57, -2849.43, 6.3, 135.0),
+          vector4(-503.58, -2858.46, 6.3, 135.0),
+          vector4(-521.37, -2876.22, 6.3, 135.0)
         },
         models = {
           'prop_boxpile_02b',
           'prop_boxpile_02c',
           'prop_boxpile_03a',
-          'prop_boxpile_06a',
-          'prop_boxpile_07a',
-          'prop_boxpile_07d'
+          'prop_boxpile_06a'
         }
       }
     }
