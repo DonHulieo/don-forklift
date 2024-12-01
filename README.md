@@ -62,7 +62,7 @@ Warehousing System with Forklift Logistics for FiveM!
 #### Initial Setup
 
 - Always use the latest FiveM artifacts (tested on 6683), you can find them [here](https://runtime.fivem.net/artifacts/fivem/build_server_windows/master/).
-- Download the latest version from your keymaster.
+- Download the latest release from [Realeases](https://github.com/DonHulieo/don-forklift/releases).
 - Extract the contents of the zip file into your resources folder, into a folder which starts after your framework & `duff` or;
 - Ensure the script in your `server.cfg` after your framework & `duff`.
 - Configure `shared/config.lua` & `server/config.lua` to your liking, see [Configuration](#configuration) for more information.
