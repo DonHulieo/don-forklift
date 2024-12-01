@@ -13,12 +13,12 @@ return {
   ['Pay'] = {
     { -- Walker Logistics
       min_per_pallet = 50,
-      time_limit = 300,
-      max_loads = 1
+      time_limit = 180,
+      max_loads = 5
     }, { -- Pacific Shipyard
       min_per_pallet = 50,
-      time_limit = 450,
-      max_loads = 1
+      time_limit = 180,
+      max_loads = 5
     }, { -- PostOp Depository
       min_per_pallet = 75,
       time_limit = 120,

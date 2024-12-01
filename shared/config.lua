@@ -5,7 +5,7 @@ local duff = duff
 
 return {
   ---@type boolean
-  ['DebugMode'] = true,
+  ['DebugMode'] = false,
   ---@type {enabled: boolean, pallet: {type: number, colour: {r: number, g: number, b: number, a: number}, scale: vector3}, pickup: {type: number, colour: {r: number, g: number, b: number, a: number}, scale: vector3}}
   ['Marker'] = {
     enabled = true,
@@ -245,14 +245,14 @@ return {
       },
       ['Pallets'] = {
         coords = {
-          vector3(-179.08, -2643.96, 6.02),
-          vector3(-129.5, -2668.91, 6.0),
-          vector3(-128.16, -2705.70, 6.01),
-          vector3(-127.63, -2699.01, 6.01),
-          vector3(-105.28, -2684.25, 6.00),
-          vector3(-100.63, -2647.36, 6.02),
-          vector3(38.79, -2678.8, 6.01),
-          vector3(-83.72, -2655.93, 6.0)
+          vector4(-179.08, -2643.96, 6.02, 89.78),
+          vector4(-129.5, -2668.91, 6.0, 89.78),
+          vector4(-128.16, -2705.70, 6.01, 359.78),
+          vector4(-127.63, -2699.01, 6.01, 359.78),
+          vector4(-105.28, -2684.25, 6.00, 359.78),
+          vector4(-100.63, -2647.36, 6.02, 359.78),
+          vector4(38.79, -2678.8, 6.01, 179.78),
+          vector4(-83.72, -2655.93, 6.0, 89.78)
         },
         models = {
           'prop_boxpile_02b',
