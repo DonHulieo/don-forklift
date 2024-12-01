@@ -277,9 +277,8 @@ end
 ---@param time integer
 ---@param max_time integer
 ---@return number score
-local function get_pay(pay, loads, time, max_time) -- https://gamedev.stackexchange.com/questions/165604/score-multiplier-based-on-lowest-time
-  local max, denom = pay - 1, loads * 0.01
-  return (max / (denom ^ (time / max_time))) + 1
+local function get_pay(pay, loads, time, max_time)
+  return ((pay - 1) * (loads * (1 / (time / max_time)))) + 1
 end
 
 ---@param location integer
@@ -300,7 +299,7 @@ local function finish_mission(location, identifier, health, loads)
 	local msg = health > 0.9 and 'pristine' or health > 0.75 and 'pretty nice' or health > 0.5 and 'alright, I guess' or health > 0.25 and 'pretty shit' or 'loaded at least'
 	NOTIFY(src, 'This product is '..msg..' and it took you '..time_taken..' seconds! I\'ll give you $'..pay..'.', 'success')
 	bridge.addplayermoney(src, 'cash', pay)
-	local debug_msg = 'Mission finished for '..bridge.getplayername(src)..' ('..identifier..') at '..location..'\nHealth: '..health..'\nLoads: '..loads..'\nTime: '..time_taken..'\nPay: '..pay
+	local debug_msg = 'Mission finished for '..bridge.getplayername(src)..' ('..identifier..') at '..location..'\nHealth Ratio: '..health..'\nPallets Loaded: '..loads..'\nTime Taken: '..time_taken..'\nPay: '..pay
 	debug_print(debug_msg)
 	log_to_discord(debug_msg)
 	reserve_warehouse(location, identifier, false)
