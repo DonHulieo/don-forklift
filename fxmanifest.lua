@@ -2,15 +2,18 @@ fx_version 'cerulean'
 game 'gta5'
 
 author 'DonHulieo'
-description 'Warehousing Job for QBCore'
-version '1.2.2'
+description 'Don\'s Warehousing System with Forklift Logistics for FiveM'
+version '1.3.0'
+url 'https://github.com/DonHulieo/don-forklift'
 
-shared_scripts {'@duff/shared/import.lua', 'config.lua'}
+shared_script '@duff/shared/import.lua'
 
-client_scripts {'client/main.lua'}
+server_script 'server/main.lua'
 
-server_scripts {'server/main.lua'}
+client_script 'client/main.lua'
 
-dependencies {'qb-core'}
+files {'shared/config.lua', 'server/config.lua'}
+
+dependencies {'/onesync', 'duff', 'iblips'}
 
 lua54 'yes'
