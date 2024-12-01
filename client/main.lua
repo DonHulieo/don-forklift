@@ -1,6 +1,6 @@
 local duff, Citizen = duff, Citizen
 local iblips = exports.iblips
-local array, await, blips, bridge, math, require, streaming = duff.array, duff.await, duff.blips, duff.bridge, duff.math, duff.package.require, duff.streaming
+local array, await, bridge, math, require, streaming = duff.array, duff.await, duff.bridge, duff.math, duff.package.require, duff.streaming
 ---@module 'don-forklift.shared.config'
 local config = require 'shared.config'
 local DEBUG_MODE <const> = config.DebugMode
@@ -18,11 +18,18 @@ local NOTIFY = config.Notify
 local LOAD_EVENT <const>, UNLOAD_EVENT <const>, JOB_EVENT <const> = bridge['_DATA']['EVENTS'].LOAD, bridge['_DATA']['EVENTS'].UNLOAD, bridge['_DATA']['EVENTS'].JOBDATA
 local RES_NAME <const> = GetCurrentResourceName()
 local entered_thread, entered_warehouse, isLoggedIn = false, false, false
+local Warehouses, Zones = {}, {}
 local game_timer = GetGameTimer
 local cit_await = Citizen.Await
-local Warehouses = {}
 
 -------------------------------- FUNCTIONS --------------------------------
+
+---@param key string
+---@param label string
+local function add_label(key, label)
+  if DoesTextLabelExist(key) and GetLabelText(key) == label then return end
+  AddTextEntry(key, label)
+end
 
 ---@param text string
 local function debug_print(text)
@@ -49,6 +56,99 @@ local function remove_blip(location, type)
   return iblips:remove(blip)
 end
 
+---@param x number
+---@param y number
+---@param z number
+---@param label string
+local function draw_text_3DS(x, y, z, label)
+  local on_screen, _x, _y = World3dToScreen2d(x, y, z)
+  local scale = 0.35
+  local text = GetLabelText(label)
+  if on_screen then
+    SetTextScale(scale, scale)
+    SetTextFont(4)
+    SetTextProportional(true)
+    SetTextColour(255, 255, 255, 215)
+    SetTextDropshadow(0, 0, 0, 0, 255)
+    SetTextEdge(1, 0, 0, 0, 255)
+    SetTextDropShadow()
+    SetTextOutline()
+    SetTextCentre(true)
+    BeginTextCommandDisplayText(label)
+    EndTextCommandDisplayText(_x, _y)
+    local factor = (string.len(text)) / 370
+    DrawRect(_x, _y + 0.0125, 0.015 + factor, 0.03, 41, 11, 41, 100)
+  end
+end
+
+---@param location integer
+---@return boolean?
+local function is_player_using_warehouse(location)
+  local identifier = bridge.getidentifier()
+  location = location or GetClosestWarehouse()
+  if not LOCATIONS[location] then return end
+  return GetStateBagValue('global', 'forklift:warehouse:'..location) == identifier
+end
+
+---@param location integer
+---@param ped_type 'sign_up'|'garage'
+---@param entity integer?
+---@return number? distance, vector3? coords
+local function get_dist_warehouse_ped(location, ped_type, entity)
+  if not LOCATIONS[location] then return end
+  local warehouse = LOCATIONS[location]
+  local ped = warehouse.Peds[ped_type == 'sign_up' and 1 or 2]
+  local coords = ped.coords.xyz
+  entity = entity or PlayerPedId()
+  return #(GetEntityCoords(entity) - coords), coords
+end
+
+---@param location integer
+---@return boolean? is_using
+local function is_any_player_using_warehouse(location)
+  location = location or GetClosestWarehouse()
+  if not LOCATIONS[location] then return end
+  return GetStateBagValue('global', 'forklift:warehouse:'..location) --[[@as integer]] ~= nil
+end
+
+local function entry_thread()
+  if entered_thread then return end
+  local sleep = 5000
+  local ped = PlayerPedId()
+  if not DoesEntityExist(ped) then repeat Wait(100) until DoesEntityExist(ped) or not isLoggedIn end
+  local coords = GetEntityCoords(ped)
+  entered_thread = true
+  while isLoggedIn do
+    Wait(sleep)
+    if Zones[GetZoneAtCoords(coords.x, coords.y, coords.z)] then
+      sleep = 2500
+      local current = GetClosestWarehouse(ped)
+      local dist = get_dist_warehouse_ped(current, 'sign_up')
+      local location = LOCATIONS[current]
+      if location and dist <= 100.0 then
+        sleep = 500
+        if dist <= 5.0 and not IsNuiFocused() then
+          sleep = 0
+          local not_user = is_any_player_using_warehouse(current)
+          local in_use = is_player_using_warehouse(current)
+          local signup_coords = location.coords
+          draw_text_3DS(signup_coords.x, signup_coords.y, signup_coords.z + 1.0, not_user and not in_use and 'In Use' or in_use and 'forklift_quit' or 'forklift_signup')
+          if dist <= 2.0 then
+            if IsControlJustPressed(0, 38) then TriggerEvent('forklift:client:SetupOrder', current, not in_use, in_use) end
+          end
+        else
+          sleep = 500
+        end
+      else
+        sleep = 2500
+      end
+    else
+      sleep = 5000
+    end
+    coords = GetEntityCoords(ped)
+  end
+end
+
 ---@return table warehouses
 local function init_warehouses()
   for i = 1, #LOCATIONS do
@@ -67,6 +167,9 @@ local function init_warehouses()
         remove_blip(i, 'main')
       end
     end
+    if not USE_TARGET then
+      Zones[GetZoneAtCoords(coords.x, coords.y, coords.z)] = i
+    end
   end
   return Warehouses
 end
@@ -74,17 +177,15 @@ end
 ---@param resource string? Starting resource name or nil.
 local function init_script(resource)
   if resource and type(resource) == 'string' and resource ~= RES_NAME then return end
+  if not USE_TARGET then
+    add_label('forklift_signup', '[~g~E~w~] - Take Order')
+    add_label('forklift_quit', '[~g~E~w~] - Cancel Order')
+    add_label('forklift_retrieve', '[~g~E~w~] - Take Forklift')
+    add_label('forklift_return', '[~g~E~w~] - Return Forklift')
+  end
   init_warehouses()
   isLoggedIn = LocalPlayer.state.isLoggedIn or IsPlayerPlaying(PlayerId())
-end
-
----@param location integer
----@return boolean?
-local function is_player_using_warehouse(location)
-  local identifier = bridge.getidentifier()
-  location = location or GetClosestWarehouse()
-  if not LOCATIONS[location] then return end
-  return GetStateBagValue('global', 'forklift:warehouse:'..location) == identifier
+  if not USE_TARGET then CreateThread(entry_thread) end
 end
 
 ---@param entity integer The entity ID.
@@ -243,7 +344,7 @@ local function setup_vehicle(location, initiate)
       end
       TriggerServerEvent('forklift:server:RemoveEntity', location, VehToNet(veh))
       NOTIFY(nil, 'Forklift returned to garage...', 'success')
-      if not not is_player_using_warehouse(location) then remove_blip(location, 'garage') end
+      if not is_player_using_warehouse(location) then remove_blip(location, 'garage') end
     else
       NOTIFY(nil, 'You have no forklift to return...', 'error')
     end
@@ -261,14 +362,6 @@ local function get_owned_pickup(location)
   local identifier = bridge.getidentifier()
   local veh = pickup.veh
   if veh and DoesEntityExist(veh) and Entity(veh).state['forklift:vehicle:owner'] == identifier then return veh, pickup.ped end
-end
-
----@param location integer
----@return boolean? is_using
-local function is_any_player_using_warehouse(location)
-  location = location or GetClosestWarehouse()
-  if not LOCATIONS[location] then return end
-  return GetStateBagValue('global', 'forklift:warehouse:'..location) --[[@as integer]] ~= nil
 end
 
 ---@param coords vector3
@@ -519,13 +612,6 @@ end
 ---@param resource string? Stopping resource name or nil.
 local function deinit_script(resource)
   if resource and type(resource) == 'string' and resource ~= RES_NAME then return end
-  local current = get_warehouse_player_is_using() or GetClosestWarehouse()
-  local obj = get_owned_object(current)
-  if obj then setup_mission_obj(obj, false, true) end
-  local veh = get_owned_vehicle(current)
-  if veh then setup_vehicle(current, false) end
-  local pickup = get_owned_pickup(current)
-  if pickup then setup_mission_ai(current, false, true) end
   for i = 1, #LOCATIONS do
     local location = LOCATIONS[i]
     local warehouse = Warehouses[i]
@@ -542,6 +628,15 @@ local function deinit_script(resource)
     if is_player_using_warehouse(i) then TriggerServerEvent('forklift:server:ReserveWarehouse', location, bridge.getidentifier(), false) end
     table.wipe(warehouse)
   end
+  local current = get_warehouse_player_is_using() or GetClosestWarehouse()
+  local obj = get_owned_object(current)
+  if obj then setup_mission_obj(obj, false, true) end
+  local veh = get_owned_vehicle(current)
+  if veh then setup_vehicle(current, false) end
+  local pickup = get_owned_pickup(current)
+  if pickup then setup_mission_ai(current, false, true) end
+  entered_thread, entered_warehouse, isLoggedIn = false, false, false
+  Warehouse, Zones = {}, {}
 end
 
 ---@param entity integer
@@ -595,7 +690,8 @@ local function catch_ped_state(name, key, value, _, replicated)
   setup_ped_scenario(entity, LOCATIONS[wh_key]['Peds'][ped_key])
   Warehouses[wh_key] = Warehouses[wh_key] or {}
   Warehouses[wh_key][wh_type] = Warehouses[wh_key][wh_type] or {}
-  Warehouses[wh_key][wh_type].target = true and bridge.addlocalentity(entity, {
+  if not USE_TARGET then return end
+  Warehouses[wh_key][wh_type].target = bridge.addlocalentity(entity, {
     {
       name = 'forklift_'..wh_type:lower()..'_target_'..wh_key,
       label = is_start and 'Take Order' or 'Take Forklift',
@@ -648,6 +744,32 @@ local function does_warehouse_require_job(location)
 end
 
 ---@param location integer
+local function display_garage_texts(location)
+  if USE_TARGET then return end
+  if not LOCATIONS[location] or entered_warehouse or not isLoggedIn then return end
+  entered_warehouse = true
+  local ped = PlayerPedId()
+  local sleep = 2500
+  CreateThread(function()
+    local dist, coords = get_dist_warehouse_ped(location, 'garage', ped) --[[@cast dist -?]] --[[@cast coords -?]]
+    while entered_warehouse do
+      Wait(sleep)
+      local has_vehicle = get_owned_vehicle(location)
+      if dist <= 5.0 then
+        sleep = 0
+        draw_text_3DS(coords.x, coords.y, coords.z, not has_vehicle and 'forklift_retrieve' or 'forklift_return')
+        if dist <= 2.0 then
+          if IsControlJustPressed(0, 38) then TriggerEvent('forklift:client:SetupVehicle', location, not has_vehicle) end
+        end
+      else
+        sleep = 2500
+      end
+      dist = get_dist_warehouse_ped(location, 'garage', ped)
+    end
+  end)
+end
+
+---@param location integer
 ---@param initiate boolean
 ---@param cancelled boolean
 local function setup_order(location, initiate, cancelled)
@@ -668,6 +790,7 @@ local function setup_order(location, initiate, cancelled)
     TaskStartScenarioInPlace(ped, 'WORLD_HUMAN_CLIPBOARD', 0, true)
     setup_mission_obj(init_mission_obj(pallets.models, pallets.coords, location), true, false)
     wrh_data.blips.garage = iblips:initblip('coord', {coords = warehouse.Peds[2].coords.xyz}, warehouse.blip.options.garage)
+    if not USE_TARGET then display_garage_texts(location) end
     NOTIFY(nil, 'Delivery is marked...', 'success', 2500)
     Wait(1000)
     ClearPedTasks(ped)
@@ -676,7 +799,6 @@ local function setup_order(location, initiate, cancelled)
     if cancelled then
       if get_owned_vehicle(location) then setup_vehicle(location, false) end
       NOTIFY(nil, 'Order cancelled...', 'error')
-      remove_blip(location, 'garage')
     end
   end
 end
