@@ -111,6 +111,21 @@ local function is_any_player_using_warehouse(location)
   return GetStateBagValue('global', 'forklift:warehouse:'..location) --[[@as integer]] ~= nil
 end
 
+---@param location integer?
+---@return integer? object
+local function get_owned_object(location)
+  location = location or get_warehouse_player_is_using() or GetClosestWarehouse()
+  local warehouse = Warehouses[location]
+  if not warehouse then return end
+  local objs = warehouse.objs
+  if not objs then return end
+  local identifier = bridge.getidentifier()
+  for i = 1, #objs do
+    local obj = objs[i]
+    if obj and DoesEntityExist(obj) and Entity(obj).state['forklift:object:owner'] == identifier then return obj end
+  end
+end
+
 local function entry_thread()
   if entered_thread then return end
   local sleep = 5000
@@ -129,10 +144,11 @@ local function entry_thread()
         sleep = 500
         if dist <= 5.0 and not IsNuiFocused() then
           sleep = 0
-          local not_user = is_any_player_using_warehouse(current)
+          local has_object = get_owned_object(current) ~= nil
           local in_use = is_player_using_warehouse(current)
+          local not_user = is_any_player_using_warehouse(current) and not in_use
           local signup_coords = location.coords
-          draw_text_3DS(signup_coords.x, signup_coords.y, signup_coords.z + 1.0, not_user and not in_use and 'In Use' or in_use and 'forklift_quit' or 'forklift_signup')
+          draw_text_3DS(signup_coords.x, signup_coords.y, signup_coords.z + 1.0, not_user and 'forklift_inuse' or has_object and 'forklift_quit' or 'forklift_signup')
           if dist <= 2.0 then
             if IsControlJustPressed(0, 38) then TriggerEvent('forklift:client:SetupOrder', current, not in_use, in_use) end
           end
@@ -178,10 +194,11 @@ end
 local function init_script(resource)
   if resource and type(resource) == 'string' and resource ~= RES_NAME then return end
   if not USE_TARGET then
+    add_label('forklift_inuse', '~r~Shooting Range In Use~w~')
     add_label('forklift_signup', '[~g~E~w~] - Take Order')
-    add_label('forklift_quit', '[~g~E~w~] - Cancel Order')
+    add_label('forklift_quit', '[~r~E~w~] - Cancel Order')
     add_label('forklift_retrieve', '[~g~E~w~] - Take Forklift')
-    add_label('forklift_return', '[~g~E~w~] - Return Forklift')
+    add_label('forklift_return', '[~r~E~w~] - Return Forklift')
   end
   init_warehouses()
   isLoggedIn = LocalPlayer.state.isLoggedIn or IsPlayerPlaying(PlayerId())
@@ -261,21 +278,6 @@ local function setup_mission_obj(obj, initiate, cancelled)
       local radius = math.sqrt(diff.x^2 + diff.y^2 + diff.z^2) * 0.5
       ClearAreaOfObjects(coords.x, coords.y, coords.z, radius, 2)
     end
-  end
-end
-
----@param location integer?
----@return integer? object
-local function get_owned_object(location)
-  location = location or get_warehouse_player_is_using() or GetClosestWarehouse()
-  local warehouse = Warehouses[location]
-  if not warehouse then return end
-  local objs = warehouse.objs
-  if not objs then return end
-  local identifier = bridge.getidentifier()
-  for i = 1, #objs do
-    local obj = objs[i]
-    if obj and DoesEntityExist(obj) and Entity(obj).state['forklift:object:owner'] == identifier then return obj end
   end
 end
 
@@ -755,6 +757,8 @@ local function display_garage_texts(location)
     while entered_warehouse do
       Wait(sleep)
       local has_vehicle = get_owned_vehicle(location)
+      if not isLoggedIn then return end
+      if not is_player_using_warehouse(location) and not has_vehicle then print('done') return end
       if dist <= 5.0 then
         sleep = 0
         draw_text_3DS(coords.x, coords.y, coords.z, not has_vehicle and 'forklift_retrieve' or 'forklift_return')
