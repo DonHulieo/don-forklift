@@ -7,7 +7,6 @@ Warehousing System with Forklift Logistics for FiveM!
 - Optimised Code, Resmon of 0~0.02ms. Peaking Whilst Creating the Pallets, and Worst Case Reaching 0.06ms if Using DrawText.
 - Fully Configurable Warehousing System.
 - Configurable Locations which Allow for Multiple Warehouses, each with their Own Vehicles, Themes and Job Requirements.
-- Configurable Test Types, Display Times, Target Limits, Required Weapons and Rewarded Licenses.
 - Payments for Deliveries, with Penalties for Late Deliveries and Damaged Pallets.
 - Strong Exploit Protection, with all Sensitive Data being Stored on the Server.
 - 3 Locations Pre-Configured, with the Ability to Add More.
