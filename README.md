@@ -374,4 +374,4 @@ end
 
 ### Changelog
 
-- [Releases](https://github.com/DonHulieo/don-forklift/compare/v1.2...v1.3.0)
+- [Releases](https://github.com/DonHulieo/don-forklift/compare/v1.3.0...v1.3.1)
