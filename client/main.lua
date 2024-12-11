@@ -707,7 +707,7 @@ local function catch_ped_state(name, key, value, _, replicated)
       end,
       canInteract = function()
         if is_start then
-          return not is_any_player_using_warehouse(wh_key) and get_owned_object(wh_key) == nil
+          return not IsPedInAnyVehicle(PlayerPedId(), false) and not is_any_player_using_warehouse(wh_key) and get_owned_object(wh_key) == nil
         else
           return is_player_using_warehouse(wh_key) and get_owned_vehicle(wh_key) == nil
         end
@@ -727,7 +727,7 @@ local function catch_ped_state(name, key, value, _, replicated)
       end,
       canInteract = function()
         if is_start then
-          return is_player_using_warehouse(wh_key) and get_owned_object(wh_key) ~= nil
+          return not IsPedInAnyVehicle(PlayerPedId(), false) and is_player_using_warehouse(wh_key) and get_owned_object(wh_key) ~= nil
         else
           return get_owned_vehicle(wh_key) ~= nil
         end
